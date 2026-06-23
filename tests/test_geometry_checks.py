@@ -149,3 +149,152 @@ class TestMeshSummary:
         assert bb["x"] == pytest.approx(10.0, abs=0.01)
         assert bb["y"] == pytest.approx(10.0, abs=0.01)
         assert bb["z"] == pytest.approx(10.0, abs=0.01)
+
+
+from src.draft_check import resolve_pull_direction, compute_draft_angles, check_draft
+
+
+class TestResolvePullDirection:
+    """Tests for the pull direction resolution helper."""
+
+    def test_z_string_returns_unit_z_vector(self):
+        vec = resolve_pull_direction("Z")
+        np.testing.assert_allclose(vec, [0.0, 0.0, 1.0])
+
+    def test_x_string_returns_unit_x_vector(self):
+        vec = resolve_pull_direction("X")
+        np.testing.assert_allclose(vec, [1.0, 0.0, 0.0])
+
+    def test_lowercase_string_is_accepted(self):
+        vec = resolve_pull_direction("z")
+        np.testing.assert_allclose(vec, [0.0, 0.0, 1.0])
+
+    def test_invalid_string_raises_value_error(self):
+        with pytest.raises(ValueError):
+            resolve_pull_direction("W")
+
+    def test_arbitrary_vector_is_normalized(self):
+        vec = resolve_pull_direction(np.array([0.0, 0.0, 5.0]))
+        np.testing.assert_allclose(np.linalg.norm(vec), 1.0, atol=1e-6)
+
+    def test_zero_vector_raises_value_error(self):
+        with pytest.raises(ValueError):
+            resolve_pull_direction(np.array([0.0, 0.0, 0.0]))
+
+
+class TestComputeDraftAngles:
+    """
+    Tests for draft angle computation against meshes with known geometry.
+
+    A box mesh with Z pull has:
+      top and bottom faces: normals parallel to Z, draft angle = 90 degrees
+      four side walls: normals perpendicular to Z, draft angle = 0 degrees
+    """
+
+    def test_horizontal_faces_have_ninety_degree_draft(self, tmp_path):
+        """
+        The top and bottom faces of an axis-aligned box have normals
+        pointing directly along Z. Their draft angle relative to Z pull
+        should be exactly 90 degrees.
+        """
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        angles = compute_draft_angles(mesh, "Z")
+
+        # Top and bottom faces: normals are [0,0,1] and [0,0,-1]
+        # dot with Z = 1.0, arcsin(1.0) = 90 degrees
+        top_bottom = angles[angles > 89.0]
+        assert len(top_bottom) > 0
+
+    def test_vertical_faces_have_near_zero_draft(self, tmp_path):
+        """
+        The four side walls of an axis-aligned box have normals perpendicular
+        to Z. Their draft angle relative to Z pull should be near 0 degrees.
+        """
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        angles = compute_draft_angles(mesh, "Z")
+
+        side_walls = angles[angles < 1.0]
+        assert len(side_walls) > 0
+
+    def test_output_shape_matches_face_count(self, tmp_path):
+        stl_path = tmp_path / "box.stl"
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        mesh.export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        angles = compute_draft_angles(mesh, "Z")
+        assert angles.shape == (len(mesh.faces),)
+
+    def test_all_values_between_zero_and_ninety(self, tmp_path):
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        angles = compute_draft_angles(mesh, "Z")
+        assert float(angles.min()) >= 0.0
+        assert float(angles.max()) <= 90.0
+
+
+class TestCheckDraft:
+    """Tests for the top-level check_draft() function."""
+
+    def test_box_with_z_pull_flags_side_walls(self, tmp_path):
+        """
+        A box aligned to the Z axis has side walls with zero draft.
+        check_draft() must flag these with severity high or medium,
+        not pass.
+        """
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_draft(mesh, pull_direction="Z", min_draft_degrees=1.0)
+        assert result["severity"] in ("medium", "high")
+        assert result["face_count_flagged"] > 0
+
+    def test_result_contains_required_keys(self, tmp_path):
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_draft(mesh)
+        required = {
+            "category", "severity", "face_count_flagged", "face_count_total",
+            "flagged_face_indices", "min_measured_degrees", "mean_measured_degrees",
+            "threshold_degrees", "pull_direction", "description",
+        }
+        assert required.issubset(result.keys())
+
+    def test_category_is_draft_angle(self, tmp_path):
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_draft(mesh)
+        assert result["category"] == "draft_angle"
+
+    def test_flagged_indices_are_python_list(self, tmp_path):
+        """
+        flagged_face_indices must be a plain Python list, not a numpy array.
+        numpy arrays do not serialize to JSON, which would break report.py.
+        """
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_draft(mesh)
+        assert isinstance(result["flagged_face_indices"], list)
