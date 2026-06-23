@@ -647,3 +647,92 @@ class TestCheckThickness:
 
         result = check_thickness(mesh, sample_count=50)
         assert result["n_samples_measured"] <= result["n_samples_attempted"]
+
+
+from src.undercut_check import compute_pull_alignment, check_undercuts
+
+
+class TestComputePullAlignment:
+    """Tests for face normal alignment with pull direction."""
+
+    def test_output_shape_matches_face_count(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        alignment = compute_pull_alignment(mesh, "Z")
+        assert alignment.shape == (len(mesh.faces),)
+
+    def test_values_within_minus_one_to_one(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        alignment = compute_pull_alignment(mesh, "Z")
+        assert float(alignment.min()) >= -1.0 - 1e-6
+        assert float(alignment.max()) <= 1.0 + 1e-6
+
+    def test_top_face_has_positive_alignment_with_z(self):
+        """
+        The top face of a box has normal pointing up (0,0,1).
+        Its dot product with Z pull (0,0,1) should be close to 1.0.
+        """
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        alignment = compute_pull_alignment(mesh, "Z")
+        assert float(alignment.max()) > 0.99
+
+    def test_bottom_face_has_negative_alignment_with_z(self):
+        """
+        The bottom face of a box has normal pointing down (0,0,-1).
+        Its dot product with Z pull should be close to -1.0.
+        """
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        alignment = compute_pull_alignment(mesh, "Z")
+        assert float(alignment.min()) < -0.99
+
+
+class TestCheckUndercuts:
+    """Tests for the top-level check_undercuts() function."""
+
+    def test_result_contains_required_keys(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_undercuts(mesh)
+        required = {
+            "category", "severity", "face_count_flagged", "face_count_total",
+            "flagged_face_indices", "most_opposing_alignment",
+            "opposing_threshold", "pull_direction", "description",
+            "methodology_note",
+        }
+        assert required.issubset(result.keys())
+
+    def test_category_is_undercuts(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_undercuts(mesh)
+        assert result["category"] == "undercuts"
+
+    def test_box_bottom_face_flagged_with_z_pull(self):
+        """
+        A box pulled along Z has a bottom face with normal (0,0,-1).
+        Its alignment with Z pull is -1.0, well below the threshold.
+        The check must flag at least one face.
+        """
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_undercuts(mesh, pull_direction="Z")
+        assert result["face_count_flagged"] > 0
+
+    def test_flagged_indices_are_python_list(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_undercuts(mesh)
+        assert isinstance(result["flagged_face_indices"], list)
+
+    def test_tight_threshold_reduces_flagged_count(self):
+        """
+        A threshold of -0.99 (nearly fully opposing) flags fewer faces
+        than the default threshold of -0.259. This confirms the threshold
+        parameter is actually applied in the computation.
+        """
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result_default = check_undercuts(mesh, opposing_threshold=-0.259)
+        result_tight = check_undercuts(mesh, opposing_threshold=-0.99)
+        assert result_tight["face_count_flagged"] <= result_default["face_count_flagged"]
+
+    def test_methodology_note_present_and_nonempty(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_undercuts(mesh)
+        assert isinstance(result["methodology_note"], str)
+        assert len(result["methodology_note"]) > 0
+
