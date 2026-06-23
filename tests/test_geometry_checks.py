@@ -736,3 +736,128 @@ class TestCheckUndercuts:
         assert isinstance(result["methodology_note"], str)
         assert len(result["methodology_note"]) > 0
 
+from src.feature_check import (
+    check_rib_thickness_proxy,
+    compute_edge_dihedral_angles,
+    check_sharp_corners,
+)
+
+
+class TestCheckRibThicknessProxy:
+    """Tests for the rib thickness proxy check."""
+
+    def test_result_contains_required_keys(self, tmp_path):
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_rib_thickness_proxy(mesh)
+        required = {
+            "category", "severity", "nominal_wall_mm", "max_rib_ratio",
+            "n_samples_measured", "pct_exceeding_ratio",
+            "description", "methodology_note",
+        }
+        assert required.issubset(result.keys())
+
+    def test_category_is_rib_thickness_proxy(self, tmp_path):
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_rib_thickness_proxy(mesh)
+        assert result["category"] == "rib_thickness_proxy"
+
+    def test_methodology_note_present(self, tmp_path):
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_rib_thickness_proxy(mesh)
+        assert len(result["methodology_note"]) > 0
+
+    def test_thick_box_exceeds_rib_threshold(self, tmp_path):
+        """
+        A 10x10x10mm solid box measured with a 2.5mm nominal wall
+        will have thickness measurements around 10mm, far exceeding
+        the rib threshold of 2.5 / 0.60 = 4.17mm.
+        """
+        stl_path = tmp_path / "box.stl"
+        trimesh.creation.box(extents=[10.0, 10.0, 10.0]).export(str(stl_path))
+        from src.load_geometry import load_stl
+        mesh = load_stl(str(stl_path))
+
+        result = check_rib_thickness_proxy(
+            mesh, nominal_wall_mm=2.5, max_rib_ratio=0.60, random_seed=42
+        )
+        assert result["severity"] != "pass"
+
+
+class TestComputeEdgeDihedralAngles:
+    """Tests for dihedral angle computation."""
+
+    def test_returns_array_for_valid_mesh(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        angles = compute_edge_dihedral_angles(mesh)
+        assert isinstance(angles, np.ndarray)
+        assert len(angles) > 0
+
+    def test_box_has_ninety_degree_corners(self):
+        """
+        A box has right angle corners. The interior dihedral angle at
+        each edge should be 90 degrees.
+        """
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        angles = compute_edge_dihedral_angles(mesh)
+        assert any(abs(a - 90.0) < 1.0 for a in angles)
+
+    def test_angles_within_zero_to_180(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        angles = compute_edge_dihedral_angles(mesh)
+        assert float(angles.min()) >= 0.0 - 1e-6
+        assert float(angles.max()) <= 180.0 + 1e-6
+
+
+class TestCheckSharpCorners:
+    """Tests for the sharp corner check."""
+
+    def test_result_contains_required_keys(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_sharp_corners(mesh)
+        required = {
+            "category", "severity", "n_edges_analyzed", "n_edges_flagged",
+            "min_measured_angle_deg", "threshold_deg", "description",
+        }
+        assert required.issubset(result.keys())
+
+    def test_category_is_sharp_corners(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_sharp_corners(mesh)
+        assert result["category"] == "sharp_corners"
+
+    def test_box_passes_at_default_threshold(self):
+        """
+        A box has 90 degree corners. The default threshold is 45 degrees.
+        A box should pass because all corners are above the threshold.
+        """
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_sharp_corners(mesh, min_corner_angle_deg=45.0)
+        assert result["severity"] == "pass"
+
+    def test_box_flagged_at_raised_threshold(self):
+        """
+        Setting the threshold above 90 degrees causes the box corners
+        to be flagged, confirming the threshold parameter is applied.
+        """
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result = check_sharp_corners(mesh, min_corner_angle_deg=120.0)
+        assert result["n_edges_flagged"] > 0
+
+    def test_flagged_count_increases_with_threshold(self):
+        mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
+        result_low = check_sharp_corners(mesh, min_corner_angle_deg=45.0)
+        result_high = check_sharp_corners(mesh, min_corner_angle_deg=120.0)
+        assert result_high["n_edges_flagged"] >= result_low["n_edges_flagged"]
+
