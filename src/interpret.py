@@ -57,13 +57,28 @@ Keep the total response under 600 words. Be specific: reference the actual \
 measurements from the findings, not generic thresholds."""
 
 
+def _strip_face_indices(checks: dict) -> dict:
+    """
+    Return a copy of the checks dict with face index lists removed.
+
+    Face indices are useful for downstream geometric tooling but are
+    meaningless to the LLM and can be extremely long on dense meshes,
+    causing the prompt to exceed the context window. Counts and
+    percentages convey the same information for interpretation purposes.
+    """
+    import copy
+    stripped = copy.deepcopy(checks)
+    for check in stripped.values():
+        check.pop("flagged_face_indices", None)
+    return stripped
+
+
 def build_user_message(findings: dict) -> str:
     """
     Serialize the findings dict into a readable message for the model.
 
-    The full findings dict is included so the model has access to every
-    computed measurement. A brief framing sentence precedes the JSON
-    to orient the model toward its interpretation task.
+    Face index lists are stripped before serialization. The model needs
+    counts, percentages, and measurements, not raw geometry references.
 
     Parameters
     ----------
@@ -77,6 +92,7 @@ def build_user_message(findings: dict) -> str:
     """
     mesh = findings["mesh_summary"]
     overall = findings["overall_severity"]
+    checks_stripped = _strip_face_indices(findings["checks"])
 
     framing = (
         f"Please interpret the following injection molding DFM analysis results. "
@@ -87,7 +103,7 @@ def build_user_message(findings: dict) -> str:
         f"and is {'watertight' if mesh['is_watertight'] else 'not watertight'}. "
         f"Overall severity computed by the pipeline: {overall.upper()}.\n\n"
         f"Detailed findings:\n"
-        f"{json.dumps(findings['checks'], indent=2)}"
+        f"{json.dumps(checks_stripped, indent=2)}"
     )
 
     return framing
