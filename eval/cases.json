@@ -1,1 +1,90 @@
-[]
+[
+  {
+    "case_id": "case_001_zero_draft_box",
+    "description": "Solid box with no draft. Ground truth programmatic case.",
+    "stl_file": "sample_stl/test_box.stl",
+    "pull_direction": "Z",
+    "parameters": {
+      "min_draft_degrees": 1.0,
+      "min_thickness_mm": 1.5,
+      "max_thickness_mm": 4.0,
+      "nominal_wall_mm": 2.5
+    },
+    "expected": {
+      "draft_angle": "high",
+      "wall_thickness": "medium",
+      "undercuts": "high",
+      "rib_thickness_proxy": "high",
+      "sharp_corners": "pass",
+      "overall": "high"
+    },
+    "assumptions": "Solid box with zero draft on all four side walls. Bottom face opposes Z pull at alignment score of negative 1.0. Ray casting through the full solid returns approximately 10mm, above the 4mm maximum threshold.",
+    "notes": "Programmatic ground truth. Geometry fully controlled. All findings verifiable by hand."
+  },
+  {
+    "case_id": "case_002_drafted_box",
+    "description": "Box with 2 degree draft on all side walls. Should pass draft check.",
+    "stl_file": "sample_stl/drafted_box.stl",
+    "pull_direction": "Z",
+    "parameters": {
+      "min_draft_degrees": 1.0,
+      "min_thickness_mm": 1.5,
+      "max_thickness_mm": 4.0,
+      "nominal_wall_mm": 2.5
+    },
+    "expected": {
+      "draft_angle": "pass",
+      "wall_thickness": "medium",
+      "undercuts": "high",
+      "rib_thickness_proxy": "high",
+      "sharp_corners": "pass",
+      "overall": "high"
+    },
+    "assumptions": "Side walls tapered at 2 degrees exceed the 1.0 degree threshold. Bottom face still opposes Z pull and will flag as undercut. Solid geometry means thickness and rib proxy still flag above maximum.",
+    "notes": "Complementary case to case_001. Proves draft check correctly passes geometry meeting the threshold, not just flags geometry failing it."
+  },
+{
+    "case_id": "case_003_thin_wall_shell",
+    "description": "Hollow shell with approximately 1mm walls. Should trigger thickness minimum violation.",
+    "stl_file": "sample_stl/thin_wall_shell.stl",
+    "pull_direction": "Z",
+    "parameters": {
+      "min_draft_degrees": 1.0,
+      "min_thickness_mm": 1.5,
+      "max_thickness_mm": 4.0,
+      "nominal_wall_mm": 2.5
+    },
+    "expected": {
+      "draft_angle": "high",
+      "wall_thickness": "high",
+      "undercuts": "high",
+      "rib_thickness_proxy": "high",
+      "sharp_corners": "pass",
+      "overall": "high"
+    },
+    "assumptions": "1mm walls fall below the 1.5mm minimum threshold triggering a high severity thickness finding. Rib proxy flags high because ray casting on a hollow shell produces long measurements when rays traverse the interior air gap and hit the opposite wall, exceeding the 4.17mm rib threshold. This reveals a known limitation: the rib proxy cannot distinguish between a thick rib and a ray traversal across an interior cavity.",
+    "notes": "Isolates the thickness minimum check with known wall geometry. The rib proxy high result is an expected false positive given the shell geometry. This limitation is documented in the README under known limitations and is the correct behavior to report honestly rather than suppress."
+},
+  {
+    "case_id": "case_004_real_casing_part",
+    "description": "Real injection molded casing part exported from CAD. 335930 faces.",
+    "stl_file": "sample_stl/casing_Ac.stl",
+    "pull_direction": "Z",
+    "parameters": {
+      "min_draft_degrees": 1.0,
+      "min_thickness_mm": 1.5,
+      "max_thickness_mm": 4.0,
+      "nominal_wall_mm": 2.5
+    },
+    "expected": {
+      "draft_angle": "high",
+      "wall_thickness": "medium",
+      "undercuts": "high",
+      "rib_thickness_proxy": "high",
+      "sharp_corners": "medium",
+      "overall": "high"
+    },
+    "assumptions": "Undercut rate of 40.6% likely includes intentional features accommodated by side action tooling given this is a mating casing part. Maximum thickness of 91.38mm indicates an uncored solid region rather than a measurement artifact. Sharp corners at medium severity reflect real geometry rather than mesh tessellation noise.",
+    "notes": "Real part case. Ground truth is manually labeled from observed pipeline output. Proves system handles production geometry at high face density. This run also revealed the context window overflow bug on dense meshes fixed in the face index stripping commit."
+  }
+]
