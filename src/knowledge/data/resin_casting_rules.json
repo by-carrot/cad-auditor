@@ -1,0 +1,403 @@
+{
+  "_source": "WayKen: Vacuum Casting Design Guide and Process Guide (waykenrm.com); SyBridge Technologies: Critical Design Guidelines for Urethane Casting (sybridge.com); Formlabs: Guide to Vacuum Casting (formlabs.com/blog/vacuum-casting-urethane-casting-polyurethane-casting); GD Prototyping: Silicone Mold Vacuum Casting Defects (gd-prototyping.com); FacFox: Design Tips for Urethane Casting (facfox.com); Protoandgo: How to Avoid Defects in Vacuum Casting (protoandgo.com)",
+
+  "process_overview": {
+    "description": "Vacuum casting (also called urethane casting or silicone molding) creates parts by pouring liquid polyurethane resin into a flexible silicone mold made from a 3D printed or CNC master pattern. The silicone mold is cut open, the master removed, and production copies are cast under vacuum to minimize trapped air. It is the standard bridge production method between prototype and high-volume injection molding.",
+    "how_it_works": [
+      "A master pattern is produced via SLA, SLS, or CNC machining to the exact final geometry including surface texture.",
+      "Liquid silicone is poured around the master and cured in an oven at 40°C for 8 to 16 hours depending on mold size.",
+      "The cured mold is cut open, the master removed, and a release agent is applied.",
+      "Two-component polyurethane resin is mixed, degassed under vacuum for 50 to 60 seconds to remove air introduced during mixing, and poured into the closed mold inside a vacuum chamber.",
+      "The filled mold is cured in an oven for 1 to 4 hours for small parts, 3 to 6 hours for large parts.",
+      "The part is removed and the cycle repeats."
+    ],
+    "mold_types": {
+      "tin_cure_silicone": "Lower cost but shrinks 1 to 4 percent during cure. Not recommended for high-tolerance applications.",
+      "platinum_cure_silicone": "Preferred. Minimal shrinkage, better dimensional stability, longer mold life. Required for tight tolerances."
+    },
+    "mold_life": "15 to 25 pulls per silicone mold for standard geometry. Complex geometry with fine detail, deep undercuts, or thin sections degrades the mold faster. Some sources report up to 50 pulls for simple geometry with platinum-cure silicone.",
+    "tolerances": {
+      "standard": "±0.15mm per 100mm",
+      "precision": "±0.05mm achievable with platinum-cure silicone and careful master pattern calibration",
+      "shrinkage_allowance": "Approximately 0.15% expected from thermal expansion of the liquid resin and flexibility of the silicone mold. The master pattern must be scaled to compensate."
+    },
+    "cost_comparison_vs_injection_molding": {
+      "tooling_cost_resin_casting": "$300 to $1,500 for a silicone mold",
+      "tooling_cost_injection_molding": "$8,000 to $50,000 for steel tooling",
+      "per_part_cost_resin_casting": "$50 to $200 per part",
+      "per_part_cost_injection_molding": "$1 to $10 at production volume",
+      "volume_sweet_spot_resin_casting": "1 to 100 parts",
+      "volume_sweet_spot_injection_molding": "1,000 parts and above",
+      "typical_lead_time_first_parts": "1 to 2 weeks for resin casting vs 6 to 12 weeks for steel injection mold",
+      "break_even_point": "Typically 300 to 1,000 parts depending on part size and complexity. Below that threshold, resin casting has lower total cost. Above it, injection molding wins on per-part economics."
+    },
+    "when_to_choose_resin_casting": [
+      "Initial production run of under 500 units where injection molding tooling cost cannot be recovered.",
+      "Parts with undercuts, complex organic geometry, or features that would require expensive side-action tooling in injection molding.",
+      "When time to first production units is critical and cannot accommodate 6 to 12 week steel tooling lead time.",
+      "Market validation: producing saleable units before committing to injection molding tooling.",
+      "Parts with high geometric complexity relative to volume, where the tooling cost per unit in injection molding would not be recovered."
+    ],
+    "when_not_to_choose": [
+      "Volume above 500 to 1,000 units: per-part cost exceeds injection molding economics at scale.",
+      "Ultra-tight tolerances required across a large batch: dimensional drift increases as mold ages.",
+      "Parts requiring material properties identical to injection-molded thermoplastics: polyurethane resins approximate but do not exactly replicate ABS, PC, or PP properties.",
+      "High-UV or outdoor applications without specific UV-stable resin selection."
+    ]
+  },
+
+  "draft_angle": {
+    "relevance_for_resin_casting": "Advisory. Not mechanically required. Silicone is flexible and peels off the part surface without draft, including from zero-draft vertical faces. Draft does not determine whether the part releases successfully.",
+    "why_still_recommended": "Adding 3 to 5 degrees of draft reduces strain on the silicone mold during demolding, extends mold life beyond 20 pulls, and reduces the risk of tearing thin silicone sections around fine geometry. A mold that degrades at 10 pulls costs more per unit than one that runs to 25.",
+    "threshold_for_resin_casting": "0 degrees minimum (part will release). 3 to 5 degrees recommended for mold life optimization.",
+    "severity_in_context": "Draft violations that would be high severity in injection molding are advisory concerns in resin casting. They do not cause part failure but do affect tooling economics. If the design has zero draft and the production run is under 15 units, it is not worth redesigning for draft. If the run is 50 to 100 units requiring multiple molds, adding 3 to 5 degrees of draft reduces total tooling cost.",
+    "action": "Flag draft findings as advisory. Redesigning for draft is recommended only if multiple mold cycles will be needed across the production run."
+  },
+
+  "undercuts": {
+    "relevance_for_resin_casting": "Acceptable without additional tooling. Silicone is elastic and stretches over undercut geometry during demolding, then returns to shape for the next pour. This is the single largest advantage of resin casting over injection molding for complex form objects.",
+    "mold_life_impact": "Deep or sharp undercuts accelerate mold wear because they stress the silicone during each demolding event. Very aggressive undercuts may reduce mold life to 10 to 15 pulls instead of 20 to 25.",
+    "practical_limits": [
+      "Undercuts that would require complete mold destruction to release (fully enclosed voids with no mold split path) are not achievable. The mold must still be split along a parting line.",
+      "Extremely deep undercuts (deeper than their opening width) can trap silicone during demolding, requiring careful mold design with multiple split lines.",
+      "Undercuts with sharp re-entrant angles stress the silicone at the corner tip and can cause localized tearing after repeated cycles."
+    ],
+    "severity_in_context": "Undercut findings from the geometry pipeline are not actionable issues for resin casting. They should be treated as informational context about geometry complexity, not as defects requiring correction.",
+    "action": "No redesign required for undercuts. Document which undercuts exist for mold design reference so the mold maker can plan the parting line path."
+  },
+
+  "wall_thickness": {
+    "relevance_for_resin_casting": "Wall thickness still matters in resin casting. Walls too thin may not fill before the resin begins to gel. Walls too thick cure unevenly and can warp. However, the acceptable range is different from injection molding.",
+    "thresholds": {
+      "absolute_minimum_mm": 0.5,
+      "recommended_minimum_mm": 1.0,
+      "optimal_range_mm": "1.5 to 2.5",
+      "note": "Below 1.0mm, thin sections may not fill completely before the resin begins to gel, especially at the far end of long flow paths from the pour gate."
+    },
+    "failure_modes": [
+      "Walls below 0.5mm may not fill completely, producing an incomplete surface or feathered edge.",
+      "Very thin sections in flexible urethane grades may be too fragile for the application even if they fill.",
+      "Non-uniform wall thickness causes differential cure rates, with thick sections taking longer. This can cause warpage if the part is demolded before thick sections are fully cured.",
+      "Abrupt transitions between thick and thin sections in rigid urethane grades can create internal stress and warpage after demolding, same mechanism as injection molding."
+    ],
+    "comparison_to_im": "A wall at 0.8mm that would be flagged high severity in injection molding (below 1.5mm IM threshold) is acceptable in resin casting (above 0.5mm resin threshold). Reinterpret thickness findings against the 0.5mm floor rather than the 1.5mm injection molding floor.",
+    "fixes": [
+      "Walls below 0.5mm need redesign regardless of production method.",
+      "Walls between 0.5mm and 1.0mm are acceptable but may produce fragile sections. Evaluate against the part's functional requirements.",
+      "Very thick sections (above 6mm) should be cored if possible to reduce cure time and minimize warpage risk."
+    ]
+  },
+
+  "rib_thickness_proxy": {
+    "relevance_for_resin_casting": "Rib thickness still matters. Thick ribs create local mass concentrations that cure more slowly than surrounding walls. The differential cure rate produces sink marks on the opposite cosmetic face, identical in mechanism to injection molding.",
+    "thresholds": {
+      "rib_to_wall_ratio_max": 0.6,
+      "rib_height_to_width_max": 3.0,
+      "note": "SyBridge Technologies specifies rib width at 40 to 60 percent of wall thickness and height no more than 3 times width, matching injection molding rules."
+    },
+    "key_difference_from_im": "There is no ejection force in resin casting, so rib draft is not mechanically required. However, ribs still need to fill completely, which requires adequate vent design in the mold to allow air to escape from the rib tip.",
+    "fixes": [
+      "Reduce rib base thickness to 60% or less of the nominal wall.",
+      "Add a fillet at the base of each rib of at least 0.5mm.",
+      "For tall ribs, ensure the mold has a vent at the rib tip so air does not trap and prevent fill."
+    ]
+  },
+
+  "sharp_corners": {
+    "relevance_for_resin_casting": "Sharp corners still create stress concentration in cured urethane, especially in rigid grades. Under mechanical loading, cracks initiate at sharp corners in the same way as in injection-molded parts. The failure mode is identical; only the material properties differ.",
+    "recommendation": "Add fillets of at least 0.5mm to internal corners. 1.0mm or larger for corners that will experience mechanical stress.",
+    "note": "In flexible urethane grades, sharp corners are less critical because the material deforms rather than cracking. The appropriate fillet radius depends on the resin grade selected."
+  },
+
+  "common_defects": {
+    "bubbles_and_voids": {
+      "description": "The most common defect in resin casting. Air trapped in the liquid resin or inside the mold cavity appears as bubbles on the surface or internal voids that weaken the part.",
+      "causes": [
+        "Resin not adequately degassed before pouring. Mixing the two-component resin introduces air bubbles that remain if not removed.",
+        "Air trapped inside the mold cavity, especially in deep recesses, blind pockets, and fine details.",
+        "Pouring too quickly, which introduces turbulence and additional air.",
+        "Mold vents inadequate or missing at the last-to-fill areas."
+      ],
+      "prevention_by_process": [
+        "Degas the mixed resin under vacuum for 50 to 60 seconds before pouring.",
+        "Pour slowly and continuously from one side of the mold, allowing the resin to push air ahead of it.",
+        "Use a vacuum chamber during filling so trapped air expands and escapes rather than staying dissolved.",
+        "Preheat the resin to approximately 40°C before mixing to improve flow and reduce viscosity."
+      ],
+      "prevention_by_design": [
+        "Avoid deep blind pockets with only one opening. Add through-holes or vent slots so air can escape from the far end.",
+        "Design the pour gate to enter from the lowest point so resin rises upward, pushing air toward vents at the top.",
+        "Ensure fine detail features have a path to a vent."
+      ],
+      "severity": "Surface bubbles are cosmetic defects. Internal voids are structural defects. In cosmetic display objects, surface bubbles on A-surfaces are production-stopping defects. In structural areas, internal voids reduce part strength."
+    },
+    "weld_lines": {
+      "description": "Where two resin flow fronts meet inside the mold, they may not fuse perfectly, leaving a visible seam and a local strength reduction. Same mechanism as injection molding weld lines.",
+      "causes": "Features that split flow: holes, core pins, bosses, internal channels. Multiple pour gates.",
+      "prevention": "Same as injection molding: place flow-splitting features away from cosmetic A-surfaces. Minimize features that force flow to split and rejoin.",
+      "severity_comparison": "Generally less severe in resin casting than in injection molding because the resin is at lower pressure and temperature when the fronts meet, but the line is still visible on glossy surfaces."
+    },
+    "warpage": {
+      "description": "Non-uniform cure rate across the part creates differential internal stress. One side shrinks more than the other, bending or twisting the part after demolding.",
+      "causes": "Non-uniform wall thickness. Very thick sections cure more slowly. Demolding before full cure is complete. Poor mold temperature control.",
+      "prevention": "Uniform wall thickness throughout. Allow full cure time before demolding. For large flat parts, cure in a fixture or on a flat surface to resist warpage during the cure period."
+    },
+    "surface_haze_on_clear_parts": {
+      "description": "Transparent or translucent urethane castings develop a cloudy surface or internal haze.",
+      "causes": "Release agent contamination of the mold surface. Moisture in the resin. Incomplete mixing. Silicone byproducts on the mold surface (particularly with tin-cure silicone).",
+      "prevention": "Use platinum-cure silicone for clear parts. Apply release agent sparingly and allow full evaporation before pouring. Store and use resin in dry conditions. Mix components for the full recommended time.",
+      "note": "Tin-cure silicone molds can outgas acetic acid byproducts that contaminate the resin surface and cause haze in clear castings. This is a strong argument for platinum-cure silicone on any part where surface clarity matters."
+    },
+    "shrinkage_and_dimensional_drift": {
+      "description": "Resin casting produces approximately 0.15% shrinkage from thermal expansion of the liquid resin and the response of the flexible mold. As the silicone mold ages through repeated demoldings, it gradually stretches and the dimensions of successive parts drift.",
+      "management": "The master pattern must be scaled to compensate for the expected 0.15% shrinkage. For tight-tolerance features, confirm dimensions on the first cast and adjust the master if needed. Monitor critical dimensions across the mold's production run and retire the mold when drift exceeds tolerance."
+    }
+  },
+
+  "pour_gate_and_venting": {
+    "description": "The pour gate is where liquid resin enters the mold. Its location determines the flow path, which controls where air traps form, where weld lines appear, and which surface sees the gate vestige. Unlike injection molding, the gate vestige in resin casting is a filled hole or stub that is cut off after demolding.",
+    "rules": [
+      "Gate from the bottom or lowest point of the mold so resin rises and pushes air toward vents at the top.",
+      "Place the gate on the base or a non-cosmetic interior surface so the gate vestige (cut stub) is hidden.",
+      "Vents must be present at the highest point of the mold and at every deep pocket or fine detail that the rising resin would trap air in.",
+      "For cosmetic parts, identify A-surfaces and B-surfaces before designing the mold split and gate location so the mold maker places the gate on the B-surface.",
+      "Cosmetic quality depends heavily on gate placement, vent paths, and end-of-fill control. Even when the silicone mold reproduces the master accurately, poor flow control produces witness marks, trapped air, and visible surface defects."
+    ],
+    "collectible_specific": "Collectible form objects often have no natural B-surface: every face is potentially visible from some angle. Work with the mold maker to identify the least-visible face (usually the base or a recessed interior) and design the mold so the gate lands there. The gate stub must be cleanly cut and if the parting line and gate area will be painted, plan for this in the surface finish specification."
+  },
+
+  "mold_design_considerations": {
+    "mold_split_and_parting_line": "Silicone molds are cut open along a parting line after curing. The location of the cut determines which surfaces show a parting line seam on the cast part. Unlike injection molding, the parting line in silicone casting can follow complex contours because the mold is flexible and can be peeled open. However, the seam is still visible and should be planned to fall on a non-cosmetic surface.",
+    "multiple_split_lines": "For complex geometry, the mold can be cut along multiple planes to allow demolding of complex undercuts. Each additional cut line adds a visible seam. Design the mold split hierarchy with A-surface priority.",
+    "insert_and_core_management": "Internal voids and channels can be formed by silicone cores placed inside the mold before each pour. Unlike injection molding, these cores must be placed and removed manually for each part. Plan for this in production cycle time.",
+    "release_agent": "A release agent is applied to the mold surface before each pour to prevent sticking. The choice of release agent affects surface finish: some leave a matte release surface, others a glossy one. Release agent must be fully evaporated before pouring to avoid surface contamination, especially on clear parts."
+  },
+
+  "material_options": {
+    "rigid_urethane": {
+      "description": "Shore D 60 to 85. Approximates rigid thermoplastics like ABS. Most common grade for structural housings, display objects, and functional prototypes.",
+      "trade_names_examples": "Smooth-Cast 300 series, Alumilite casting resins, Axson RAKU-TOOL grades",
+      "limitations": "Not identical to injection-molded ABS or PC in impact resistance or long-term UV stability. Impact toughness is typically lower than ABS."
+    },
+    "flexible_urethane": {
+      "description": "Shore A 20 to 90. Approximates TPE or silicone feel. Used for soft-touch grips, flexible covers, gaskets.",
+      "note": "Sharp corners are less critical in flexible grades since the material deforms rather than cracking. Wall thickness minimums are more flexible as well."
+    },
+    "clear_urethane": {
+      "description": "Optically clear grades for windows, lenses, transparent display elements. Require platinum-cure silicone molds and careful process control to avoid haze.",
+      "surface_finish_requirement": "The master pattern must be polished to the desired clarity level since the silicone reproduces the master surface exactly. A B2-equivalent surface on the master produces a B2-equivalent surface on the cast part."
+    },
+    "specialty_grades": [
+      "Water-clear urethane for optical applications",
+      "Flame-retardant grades (UL94 V0)",
+      "High-heat grades for under-hood or electronics proximity applications",
+      "Filled grades (glass microspheres, aluminum powder) for reduced weight or metallic appearance"
+    ]
+  },
+
+  "transition_to_injection_molding": {
+    "description": "Resin casting is a common bridge production method before committing to injection molding tooling. Designing for resin casting with eventual injection molding transition in mind reduces the redesign work at the transition point.",
+    "design_decisions_that_ease_transition": [
+      "Design draft into the part from the start even though it is not required for resin casting. Parts with draft are immediately ready for injection molding tooling without geometry changes.",
+      "Keep rib thickness at 60% of nominal wall even though resin casting is more forgiving. This avoids rework when transitioning.",
+      "Place all assembly bosses away from primary cosmetic surfaces. This is good practice for both methods.",
+      "Avoid undercuts that would require expensive side-action tooling in injection molding unless the geometry genuinely requires them. Where undercuts can be designed out with minimal functional impact, remove them during the resin casting phase while the cost is zero."
+    ],
+    "cost_of_not_planning": "A part designed purely for resin casting convenience (zero draft, aggressive undercuts, very thin walls) may require significant redesign before injection molding tooling can be justified. The redesign cost and delay at that stage is much higher than addressing the issues during the resin casting phase when only a silicone mold cost is at stake."
+  }
+,
+
+  "_note": "Append these six entries to resin_casting_rules.json before its closing brace. Each entry is a top-level key.",
+
+  "master_pattern_quality": {
+    "_source": "GD Prototyping: What Is Urethane Casting (gd-prototyping.com/what-is-urethane-casting); Bang Design: Vacuum Casting Silicone Tooling Process (bangid.com); Synectic: Guide to Urethane Casting (synectic.net/guide-to-urethane-casting); rotocastmold.com: Cast Urethane Molding Process and Applications; Wortmann et al. 2022, Industrial-Scale Vacuum Casting with Silicone Molds: A Review, Applied Research (Wiley)",
+    "why_it_matters": "The silicone mold is a direct negative of the master pattern. Every surface scratch, layer line, dimensional error, or texture on the master transfers to every part produced from that mold. The master pattern is the quality ceiling for the entire production run. No amount of process optimization will produce parts better than the master.",
+    "master_production_methods": {
+      "sla_stereolithography": {
+        "description": "The preferred method for most vacuum casting masters. SLA produces parts with surface finish and fine feature resolution down to 0.05mm, capturing fine detail including sharp text, small radii, and complex undercuts.",
+        "post_processing_required": "Yes. SLA prints have support marks and layer lines that transfer to the mold if not removed. A skilled model maker sands, fills, and polishes the master to remove all layer artifacts before pouring silicone. The polishing target is visually and texturally identical to a finished injection-molded product.",
+        "recommended_for": "Cosmetic display objects, complex geometry, fine surface detail, textured surfaces."
+      },
+      "cnc_machining": {
+        "description": "Preferred when the master requires specific material properties (e.g., heat resistance during silicone cure), very tight tolerances, or machined surface characteristics. More expensive and longer lead time than SLA.",
+        "post_processing_required": "Minimal. CNC machined masters typically require only fine sanding and polishing. No layer lines to remove.",
+        "limitations": "Complex internal geometry, deep channels, overhangs, and tight internal radii may not be achievable on all CNC setups.",
+        "recommended_for": "Technical parts with tight tolerances, functional prototypes with specific material requirements."
+      },
+      "sls_nylon": {
+        "description": "Acceptable for less critical applications. SLS produces a naturally rough matte surface that transfers to the silicone mold and then to cast parts. More post-processing required than SLA.",
+        "post_processing_required": "Yes. Extensive sanding, priming, and sealing to eliminate the grainy SLS surface texture before pouring silicone.",
+        "recommended_for": "Parts where surface finish is not critical, or where a matte textured surface is the desired final result."
+      },
+      "fdm": {
+        "description": "Not recommended for vacuum casting masters. FDM layer lines are coarser than SLA and require significantly more hand finishing. The anisotropic layer structure of FDM parts also creates inconsistent surface characteristics that are difficult to fully eliminate before mold-making.",
+        "recommended_for": "Avoid unless no other option is available."
+      }
+    },
+    "master_preparation_rules": [
+      "All layer lines, print artifacts, and surface imperfections must be removed before pouring silicone. The silicone reproduces the master at microscopic scale.",
+      "If the production part requires a glossy finish, the master must be polished to that gloss level. Apply automotive wet-sand and polish sequence: 400 grit through 2000 grit wet, then polish compound.",
+      "If the production part requires a specific texture, apply that texture to the master surface before molding. Texture applied to the master transfers to every cast part.",
+      "Dimensional features on the master must already account for the 0.15% resin shrinkage. Scale the master up by 0.15% to compensate.",
+      "Apply a mold release agent to the master surface before pouring silicone. Without release agent, the silicone bonds to the master and damages both on separation."
+    ],
+    "collectible_specific": "For collectible form objects, the master is as important as the mold. A poorly prepared master with visible sanding scratches or unresolved layer lines produces every cast part with those same flaws. Budget adequate time for master finishing: a complex figure master may require 20 to 40 hours of hand finishing before it is ready for mold-making. This is a significant cost that must be included in the production budget, not treated as a secondary step."
+  },
+
+  "shore_hardness_selection": {
+    "_source": "GD Prototyping: Vacuum Casting Shore Hardness Chart Practical Guide (gd-prototyping.com/vacuum-casting-shore-hardness-chart); SyBridge Technologies: A Breakdown of Common Urethane Casting Materials (sybridge.com/common-urethane-casting-materials); rotocastmold.com: Cast Urethane Molding Process; 3erp.com: Urethane Casting Process Applications Materials; Uniflex: Shore Hardness and Durometer for Polyurethane (uniflexinc.com); Innovative Polymers/RAMPF: Painting Cast Urethane Parts",
+    "why_it_matters": "Shore hardness is the primary specification for selecting a urethane resin. It determines how the part feels, how it flexes under load, and whether it will perform its intended function. Choosing the wrong hardness is a design failure: a Shore A elastomer where the application demands a Shore D rigid part leads to premature failure. The selection must be made before the pour, not after.",
+    "shore_scales_explained": {
+      "shore_oo": {
+        "range": "0 to 100 OO",
+        "description": "Very soft gels, foams, and cushioning materials. Rarely relevant for structural or display parts.",
+        "reference_points": "Gel bicycle seat pad, memory foam."
+      },
+      "shore_a": {
+        "range": "0 to 100 A",
+        "description": "Flexible elastomers and soft plastics. Covers the majority of flexible urethane applications. Higher Shore A values are harder and less flexible.",
+        "reference_points": "20A: rubber band. 40A: soft silicone gasket. 60A: tire tread. 90A: skateboard wheel. 95A: very hard rubber, approaches Shore D territory but still has surface flex.",
+        "important_note": "Shore A 90 is significantly softer and more flexible than Shore D 50. The scales are not continuous and must not be compared numerically across scales."
+      },
+      "shore_d": {
+        "range": "0 to 100 D",
+        "description": "Rigid and semi-rigid plastics. Materials harder than approximately 65 Shore D feel completely rigid to the human hand and will not have surface flex or bendability.",
+        "reference_points": "40D: semi-rigid plastic. 60D: hard hat. 75D: bowling ball. 80D: rigid structural housing comparable to ABS or PC."
+      }
+    },
+    "selection_by_application": {
+      "rigid_structural_housing_or_display_object": {
+        "recommended_hardness": "Shore D 65 to 85",
+        "material_examples": "Smooth-On TASK 8 (Shore D 80), Smooth-On 300 series (Shore D 70-75), Axson PX 223 (Shore D 75)",
+        "simulates": "ABS, PC/ABS blends, engineering plastics",
+        "notes": "Parts in this range feel and perform like injection-molded rigid plastic. Suitable for housings, enclosures, display stands, and structural form objects."
+      },
+      "semi_rigid_parts_with_some_flex": {
+        "recommended_hardness": "Shore D 40 to 65",
+        "simulates": "Flexible PP, soft-touch engineering plastics",
+        "notes": "Parts with thin walls may flex or deflect. Useful for snap-fit features or parts that need some impact compliance."
+      },
+      "flexible_overmold_or_soft_touch_elements": {
+        "recommended_hardness": "Shore A 40 to 70",
+        "simulates": "TPE soft-touch grip materials",
+        "notes": "Used for grip surfaces, protective bumpers, and overmolded soft elements on rigid substrates."
+      },
+      "very_flexible_seals_and_gaskets": {
+        "recommended_hardness": "Shore A 10 to 40",
+        "notes": "Not typically relevant for collectible form objects. Used for mechanical sealing applications."
+      }
+    },
+    "painting_interaction": "Urethane resins with Shore hardness below 90A require special primers and paints formulated with flex agents. Standard automotive paints crack on materials below 90A when the part flexes during handling. This is a critical design decision: if the part will be painted and handled repeatedly, either select Shore D material or specify flex-additive primers. Source: RAMPF/Innovative Polymers painting guidelines.",
+    "collectible_specific": "Collectible display objects and figures are almost always Shore D 65 to 80. They are rigid, hold painted detail crisply, accept standard painting processes, and feel like production injection-molded parts. Shore A materials are occasionally used for articulation joints, flexible capes or accessories, or soft-touch base elements in multi-part figures."
+  },
+
+  "in_mold_inserts": {
+    "_source": "Synectic: Guide to Urethane Casting (synectic.net/guide-to-urethane-casting); protoCAD: Urethane Casting (protocad.com/urethane-castings); Broadview Product Development: Rapid Plastic Molded Prototypes (broadviewproduct.com); Quickparts: Urethane Casting Service (quickparts.com); ARRK: Urethane Casting Solutions (us.arrk.com)",
+    "why_it_matters": "Urethane casting supports in-mold inserts, where metal hardware is placed inside the mold cavity before each pour and becomes permanently encapsulated in the cured part. This produces stronger mechanical retention than post-mold heat-set inserts because the resin flows directly around the knurled insert body, creating a chemical and mechanical bond.",
+    "what_can_be_cast_in_place": [
+      "Threaded brass inserts for screw attachment points",
+      "Helicoils (wire thread inserts) for locations where wall thickness is insufficient for a full brass insert",
+      "Metal dowels and alignment pins for assembly",
+      "Magnets for magnetic closures or assembly alignment",
+      "Metal plates or reinforcement inserts at high-load attachment points",
+      "Electronic connectors, wire leads, and cable pass-throughs",
+      "Acrylic windows or lens elements in housings",
+      "Rigid urethane cores inside flexible urethane overmolds"
+    ],
+    "design_rules": [
+      "The boss or pocket diameter must match the insert manufacturer's specification. The insert must be positioned precisely in the mold before each pour, typically held by a locating pin.",
+      "Minimum wall thickness of plastic around the insert must be sufficient to prevent the insert from pulling out or cracking the surrounding material. Follow the same rules as injection molding: boss wall thickness no more than 60 to 70 percent of nominal wall.",
+      "Boss depth must accommodate the full insert length with at least 0.5mm of resin below the insert tip to prevent the tip from pulling through.",
+      "Threaded inserts must be oriented along the pull direction of the mold split so they can be placed and removed without trapping the silicone.",
+      "When wall thickness is insufficient for a standard insert, helicoils installed after casting are the preferred alternative. Helicoils are machined into the cured urethane post-mold."
+    ],
+    "advantage_over_heat_set": "Cast-in-place inserts achieve stronger pull-out resistance than heat-set inserts because the resin cures chemically around the insert body rather than relying on melted plastic to re-flow and harden. For collectibles with repeated assembly and disassembly requirements, cast-in-place brass inserts are the recommended approach.",
+    "collectible_specific": "Collectible multi-part figures and display objects commonly use cast-in-place inserts at base mounting points, articulation pin locations, and battery cover attachment points. Specify insert locations on the CAD model before master production so the mold maker can design locating pins into the mold cavity. Retrofitting insert locations after the mold is made requires a new mold."
+  },
+
+  "overmolding": {
+    "_source": "ARRK: Urethane Casting Solutions (us.arrk.com/services/urethane-casting); Jucheng Precision: Overmolding with Urethane Casting Technical Guide (jcproto.com); TriMech Manufacturing: Ultimate Guide to Urethane Casting (mfg.trimech.com); Broadview Product Development: Urethane Casting (broadviewproduct.com)",
+    "why_it_matters": "Urethane casting supports multi-material construction through overmolding. A rigid urethane substrate is cast first, then placed into a second silicone mold where a second urethane (typically flexible) is poured around it. The result is a multi-material part with a rigid structural core and a flexible or soft-touch surface element, produced without the two-shot injection tooling cost.",
+    "process": [
+      "Cast the rigid substrate (Shore D) in the primary mold and allow it to partially cure to the green state — chemically active but dimensionally stable.",
+      "Remove the substrate from the primary mold and place it into the secondary mold, which defines the overmold geometry.",
+      "Pour the secondary material (typically Shore A) around the positioned substrate under vacuum.",
+      "Cure the assembly together. When the secondary material is poured onto a still-reactive substrate, the molecules at the interface intermingle and form a chemical weld stronger than any adhesive bond.",
+      "Full cure the assembly in the oven before demolding."
+    ],
+    "critical_technical_requirements": {
+      "surface_activation": "A fully cured rigid substrate is typically too smooth for the secondary material to achieve adequate mechanical adhesion. The substrate surface must be mechanically roughened (light sanding or bead blasting) and chemically cleaned before overmolding.",
+      "green_state_timing": "The strongest bonds are achieved when the substrate is overmolded while still in the green state. The window is typically 30 to 90 minutes after demolding, depending on the specific resin system. Once the substrate has fully cured, adhesion relies on mechanical bonding only, which is weaker.",
+      "material_compatibility": "Not all urethane systems bond reliably to each other. Confirm compatibility between the rigid and flexible systems with your casting supplier before committing to the design. Some Shore A materials bond well to Shore D urethanes; others require adhesion promoters.",
+      "delamination_risk": "If the cure cycle is not properly coordinated, the soft overmold will eventually pull away from the core under repeated flexing or thermal cycling. This is called delamination failure and is the primary failure mode of overmolded urethane parts."
+    },
+    "applications_for_collectibles": [
+      "Rigid figures with soft-touch flexible capes, wings, or accessories that appear separate but are structurally integrated.",
+      "Display bases with a rigid structural core and a soft protective bottom surface.",
+      "Two-color or two-texture designs where different material zones define different visual and tactile regions of the object.",
+      "Parts with grip elements or articulation points that require localized flexibility in an otherwise rigid form."
+    ],
+    "cost_vs_injection_molding": "Overmolded urethane casting requires two molds instead of one, approximately doubling the tooling cost from $600 to $1,200 or more for a simple part. However, this is still dramatically lower than two-shot injection molding tooling, which starts at $15,000 to $40,000 for a two-component tool. For volumes under 100 parts, overmolded urethane casting is the only economically viable multi-material production option."
+  },
+
+  "post_processing": {
+    "_source": "Innovative Polymers/RAMPF: Painting Cast Urethane Parts (innovative-polymers.com/casting-tips/painting-cast-urethane-parts); TriMech Manufacturing: Ultimate Guide to Urethane Casting (mfg.trimech.com); Synectic: Guide to Urethane Casting (synectic.net); FacFox: Urethane Casting Services (facfox.com); Quickparts: Urethane Casting Service Post-Processing (quickparts.com); protoCAD: Urethane Casting (protocad.com/urethane-castings)",
+    "why_it_matters": "Resin cast parts come out of the mold in an as-cast state that typically requires post-processing before they are production-ready. The extent of post-processing depends on the master quality, the surface finish specified, and the cosmetic requirements of the application. Post-processing is a significant portion of per-part cost in low-volume production.",
+    "standard_sequence": [
+      "1. Trim flashing: remove thin films of resin at the parting line and gate stub using a sharp blade or flush cutter.",
+      "2. Remove gate stub: the pour spout leaves a small nub that must be cut flush and sanded smooth.",
+      "3. Clean release agent residue: scrub the entire part surface with warm soapy water (Dawn dish soap is specifically noted by RAMPF as effective at removing silicone release agents). Rinse thoroughly and allow to dry completely. Release agent contamination causes paint delamination.",
+      "4. Sand or blast to etch the surface: use 220 to 400 grit sandpaper or bead blasting to create fine surface pores that promote paint adhesion. After sanding, clean again to remove sanding dust.",
+      "5. Apply automotive primer: fills minor surface imperfections and provides a consistent base for color application.",
+      "6. Apply color coat: spray paint, color-matched per Pantone, RAL, or provided sample.",
+      "7. Apply clear coat (optional): protects the color layer from abrasion and UV fading. Required for outdoor or high-handling parts."
+    ],
+    "critical_rule_for_flexible_parts": "Urethane resins with Shore hardness below 90A require primers and paints formulated with flex agents. Standard rigid paints crack when applied to flexible urethane that bends during handling. This is a systemic failure mode, not a process error. Source: RAMPF/Innovative Polymers. If the part is Shore A and will be painted, specify flex-additive primer and paint to your finishing supplier explicitly.",
+    "additional_operations": {
+      "light_machining": "Rigid urethane (Shore D) can be lightly machined post-cure: drilling, milling, and cutting are all possible. This is used to achieve tight tolerances on critical interface features, add thread features, or refine geometry that the mold could not produce cleanly. Flexible Shore A grades cannot be machined reliably.",
+      "sandblasting_texturing": "Bead or sand blasting after demolding applies a uniform matte texture to the part surface. This is an alternative to master-pattern texturing and allows different texture levels to be applied to different parts from the same mold.",
+      "uv_stable_clear_coat": "Clear urethane resins and some pigmented grades yellow under prolonged UV exposure. Apply a UV-stable polyurethane or acrylic clear coat to any part intended for display under lighting or near windows.",
+      "emi_shielding": "A thin electroless coating of copper and nickel applied to the entire part or selected surfaces provides electromagnetic interference shielding. Available from specialty providers such as protoCAD. Relevant for electronic housings that must meet EMC requirements.",
+      "bonding_and_assembly": "Urethane parts can be bonded to each other or to other materials using two-part epoxy or urethane-specific adhesive. Surface preparation (sanding and cleaning) is required before bonding. Joint strength depends heavily on surface cleanliness."
+    },
+    "collectible_specific": "Production collectibles typically require the full painting sequence because in-resin pigment color matching alone rarely achieves the color accuracy, multi-tone effects, or painted detail (eyes, facial features, tattoos, insignia) that display objects require. Budget for the full sequence: clean, etch, prime, base coat, detail paint, clear coat. This sequence typically adds $15 to $50 per part at low volume for a moderately complex figure."
+  },
+
+  "color_matching": {
+    "_source": "Innovative Polymers/RAMPF: Painting Cast Urethane Parts (innovative-polymers.com); Synectic: Guide to Urethane Casting (synectic.net); ARRK: Why Urethane Casting (us.arrk.com/why-urethane-casting); iCOMold: Urethane Casting (icomold.com/capabilities/urethane-casting); SyBridge Technologies: Critical Design Guidelines for Urethane Casting (sybridge.com); 3erp.com: Urethane Casting Process",
+    "why_it_matters": "Color is applied to urethane cast parts in one of two ways: pigment added to the resin before pouring (in-resin color), or paint applied to the cured part surface (post-mold color). The method affects appearance, cost, consistency across the production run, and what happens when the surface is scratched. Both methods have specific design implications that must be decided before mold-making.",
+    "in_resin_pigmentation": {
+      "description": "Liquid or powder pigments are blended into one component of the two-part urethane system before mixing. The color is integral to the material throughout the part, not a surface coating. If the surface is scratched, the base color remains visible underneath.",
+      "process": "Pigment is added to Part A of the resin system before combining with Part B. The total working time from mixing to pour is approximately three minutes, requiring fast and accurate color work.",
+      "color_standards_achievable": "Pantone Matching System (PMS), Federal Standard, RAL, and custom colors matched to provided physical samples. Service providers including RAMPF, ARRK, and iCOMold offer color matching to these standards.",
+      "advantages": [
+        "No additional post-processing step or cost for base color.",
+        "Surface scratches reveal the same color underneath, not bare urethane.",
+        "Suitable for matte and semi-gloss finishes without additional coating."
+      ],
+      "limitations": [
+        "Batch-to-batch color variation occurs because pigment ratios are mixed by hand. Parts from different batches or different molds may have subtle color differences.",
+        "Metallics, deep blacks, and complex color effects (iridescent, pearlescent) are difficult or impossible to achieve with pigment alone.",
+        "Color accuracy depends on the skill of the operator and the pigment system. Tight Pantone tolerances across a full production run require careful process control.",
+        "Clear urethane used as a base for tinted parts has better color accuracy than opaque urethane."
+      ]
+    },
+    "post_mold_painting": {
+      "description": "The cured part is painted using standard spray paint processes after demolding, surface preparation, and priming. See the post_processing entry for the full sequence.",
+      "advantages": [
+        "Greater color accuracy and repeatability than in-resin pigment, especially for tight Pantone matching.",
+        "Enables multi-color effects: base coat, detail paint, wash effects, and clear coat all applied independently.",
+        "Required for collectibles with fine painted detail (facial features, insignia, text, fine line work).",
+        "Color can be corrected or changed between production batches without remaking the mold."
+      ],
+      "limitations": [
+        "Adds per-part cost and production time.",
+        "Paint is a surface coating that can chip or abrade in service. Clear coat extends durability.",
+        "Shore A parts require flex-additive paint systems or paint will crack during handling."
+      ]
+    },
+    "color_consistency_across_a_run": "Within a single pour session from one resin batch, color consistency is good. Across multiple sessions, pigment batch variation and mixing differences produce subtle shifts. For production runs requiring tight color consistency, specify Pantone L*a*b* color values and request color approval on a first-article part before the full run proceeds.",
+    "uv_stability": "Standard urethane pigments are not all UV-stable. Parts displayed under strong lighting or near natural light sources may experience color shift over time. Specify UV-stable pigment grades and apply a UV-inhibiting clear coat for any part intended for permanent display.",
+    "collectible_specific": "The standard production approach for collectibles is in-resin base color plus hand-applied or airbrushed paint for detail work. Use in-resin pigment for the dominant body color (skin tone, primary costume color) and post-mold painting for all detail layers. This minimizes painting complexity while maintaining the color accuracy that in-resin pigment alone cannot achieve for fine detail. For small edition runs (under 20 units), hand-painting by a skilled finisher produces the highest quality result. For runs of 50 to 100 units, airbrush with stencils and masking produces consistent results at lower per-part cost."
+  }
+}
