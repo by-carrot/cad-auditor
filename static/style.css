@@ -499,3 +499,110 @@ body {
     .dfm-canvas { height: 280px; }
     .viewport-header { flex-wrap: wrap; }
 }
+
+/* ── Viewport tooltip ─────────────────────────────────────────── */
+.viewport-tooltip {
+    position: fixed;
+    background: rgba(15, 23, 42, 0.92);
+    color: #f1f5f9;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-family: 'Inter', system-ui, sans-serif;
+    pointer-events: none;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.tt-check {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+}
+
+.tt-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: #f1f5f9;
+}
+
+/* ── Layer count badge ────────────────────────────────────────── */
+.layer-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-2);
+    margin-left: 4px;
+}
+
+/* ── Check card clickable hint ────────────────────────────────── */
+.check-card[data-check="draft_angle"]:hover,
+.check-card[data-check="undercuts"]:hover {
+    border-color: #94a3b8;
+    transition: border-color 0.15s;
+}
+
+
+/* ── Viewport legend ──────────────────────────────────────────── */
+.viewport-legend {
+    position: absolute;
+    bottom: 36px;
+    left: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.legend-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+}
+
+.legend-grad {
+    width: 12px;
+    border-radius: 3px;
+    min-height: 56px;
+}
+
+.legend-labels {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.legend-title {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    color: #cbd5e1;
+    letter-spacing: 0.04em;
+}
+
+.legend-neutral {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+.legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+/* ── Viewport section needs position:relative for legend ──────── */
+.viewport-section { position: relative; }

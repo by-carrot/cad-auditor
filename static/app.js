@@ -1,6 +1,4 @@
-import { initViewer, toggleLayer, resetCamera } from '/static/viewer.js';
-
-// ── State ──────────────────────────────────────────────
+import { initViewer, toggleLayer, resetCamera, focusOnCheck, setIsolationMode } from '/static/viewer.js';// ── State ──────────────────────────────────────────────
 const states = {
     upload:  document.getElementById('state-upload'),
     loading: document.getElementById('state-loading'),
@@ -113,6 +111,10 @@ analyzeBtn.addEventListener('click', async () => {
             alert(`Analysis failed:\n\n${data.error}`);
             return;
         }
+        
+        isolated = false;
+        const isolateBtn = document.getElementById('isolate-btn');
+        if (isolateBtn) isolateBtn.textContent = 'Isolate flagged';
 
         renderResults(data);
         showState('results');
@@ -278,6 +280,30 @@ function renderResults(data) {
         protoBlock.hidden = true;
     }
     document.getElementById('prod-cards').innerHTML = prod.map(buildCheckCard).join('');
+    
+    // Wire check cards for viewport focus and face count badges
+    setTimeout(() => {
+        document.querySelectorAll('.check-card').forEach(card => {
+            const checkName = card.dataset.check;
+            if (checkName === 'draft_angle' || checkName === 'undercuts') {
+                card.style.cursor = 'pointer';
+                card.title = 'Click to focus viewport on these faces';
+                card.addEventListener('click', () => {
+                    focusOnCheck(checkName);
+                    document.getElementById('dfm-canvas')
+                        .scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+            }
+        });
+    }, 0);
+
+    // Face count badges in layer toggles
+    const draftCount    = f.checks.draft_angle?.face_count_flagged ?? 0;
+    const undercutCount = f.checks.undercuts?.face_count_flagged    ?? 0;
+    const cDraft        = document.getElementById('count-draft_angle');
+    const cUnder        = document.getElementById('count-undercuts');
+    if (cDraft)  cDraft.textContent  = draftCount    > 0 ? draftCount.toLocaleString()    : '';
+    if (cUnder)  cUnder.textContent  = undercutCount > 0 ? undercutCount.toLocaleString() : '';
 
     const sections = parseAssessment(data.interpretation);
     document.getElementById('assessment-body').innerHTML = sections.length
