@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAD Auditor — DFM Review</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- UPLOAD STATE -->
+<div id="state-upload" class="page-state active">
+    <header class="site-header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-mark">⬡</span>
+                <span class="logo-name">CAD Auditor</span>
+            </div>
+            <p class="header-tagline">Catch injection molding problems before you prototype.</p>
+        </div>
+    </header>
+
+    <main class="upload-main">
+        <div class="ip-notice">
+            <span>🔒</span>
+            Your STL is processed on the server and deleted after analysis.
+            Only measurement data — not geometry — reaches the AI provider.
+        </div>
+
+        <div class="upload-card">
+            <div id="drop-zone" class="drop-zone">
+                <div class="drop-icon">📐</div>
+                <p class="drop-primary">Drop your STL file here</p>
+                <p class="drop-secondary">or</p>
+                <label class="file-btn" for="file-input">Choose file</label>
+                <input type="file" id="file-input" accept=".stl" hidden>
+                <p id="file-name-display" class="file-selected" hidden></p>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="prototype-method">Prototype method</label>
+                    <select id="prototype-method" class="form-select">
+                        <option value="sls">SLS nylon printing</option>
+                        <option value="resin">Resin (SLA) printing</option>
+                        <option value="fdm">FDM printing</option>
+                    </select>
+                    <p class="form-hint">How you will test your first physical sample.</p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="pull-direction">Mold pull direction</label>
+                    <select id="pull-direction" class="form-select">
+                        <option value="Z">Z axis — vertical (most common)</option>
+                        <option value="X">X axis — horizontal</option>
+                        <option value="Y">Y axis — horizontal</option>
+                    </select>
+                    <p class="form-hint">The axis your mold opens along. Z works for most flat-base objects.</p>
+                </div>
+            </div>
+
+            <button id="analyze-btn" class="analyze-btn" disabled>
+                Analyze for DFM issues
+            </button>
+        </div>
+
+        <p class="size-note">Accepts STL files up to 50 MB. Dense meshes take 15–30 seconds.</p>
+    </main>
+</div>
+
+<!-- LOADING STATE -->
+<div id="state-loading" class="page-state">
+    <header class="site-header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-mark">⬡</span>
+                <span class="logo-name">CAD Auditor</span>
+            </div>
+        </div>
+    </header>
+    <main class="loading-main">
+        <div class="spinner-wrap">
+            <div class="spinner"></div>
+            <p id="status-msg" class="status-msg">Preparing analysis…</p>
+        </div>
+        <div class="progress-steps">
+            <div class="step" id="step-geometry">Loading geometry</div>
+            <div class="step" id="step-draft">Checking draft angles</div>
+            <div class="step" id="step-thickness">Measuring wall thickness</div>
+            <div class="step" id="step-undercut">Detecting undercuts</div>
+            <div class="step" id="step-features">Analyzing rib and corner geometry</div>
+            <div class="step" id="step-interpret">Generating DFM assessment</div>
+        </div>
+    </main>
+</div>
+
+<!-- RESULTS STATE -->
+<div id="state-results" class="page-state">
+    <header class="results-header">
+        <div class="results-header-inner">
+            <div class="logo">
+                <span class="logo-mark">⬡</span>
+                <span class="logo-name">CAD Auditor</span>
+            </div>
+            <div id="results-meta" class="results-meta"></div>
+            <button id="analyze-another" class="btn-ghost">Analyze another file</button>
+        </div>
+    </header>
+
+    <main class="results-main">
+        <p class="ip-results-notice">
+            🔒 Your STL was deleted from the server after processing. Only measurement data reached the AI provider.
+        </p>
+
+        <div id="severity-banner" class="severity-banner"></div>
+
+        <section class="panel-row">
+            <div class="panel">
+                <p class="panel-label">Part Summary</p>
+                <div id="mesh-cards" class="mesh-cards"></div>
+            </div>
+            <div id="mfg-context" class="panel mfg-panel"></div>
+        </section>
+
+        <section class="checks-section">
+            <div id="prototype-findings" class="stage-block" hidden>
+                <div class="stage-heading stage-proto">⚠ Fix Before Prototyping</div>
+                <div id="proto-cards" class="check-cards"></div>
+            </div>
+            <div id="production-findings" class="stage-block">
+                <div class="stage-heading stage-prod">🔧 Fix Before Production Tooling</div>
+                <div id="prod-cards" class="check-cards"></div>
+            </div>
+        </section>
+
+        <section class="assessment-section">
+            <p class="panel-label">DFM Assessment</p>
+            <div id="assessment-body" class="assessment-body"></div>
+        </section>
+
+        <footer class="results-footer">
+            Geometric analysis is deterministic. Interpretation generated by Claude.
+            Your STL file was deleted after processing.
+        </footer>
+    </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
+
