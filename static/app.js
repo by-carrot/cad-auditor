@@ -101,6 +101,7 @@ analyzeBtn.addEventListener('click', async () => {
     formData.append('file', selectedFile);
     formData.append('pull_direction', document.getElementById('pull-direction').value);
     formData.append('prototype_method', document.getElementById('prototype-method').value);
+    formData.append('production_method', document.getElementById('production-method').value);
 
     try {
         const resp = await fetch('/analyze', { method: 'POST', body: formData });
@@ -227,7 +228,7 @@ function parseAssessment(text) {
 // ── Main render ────────────────────────────────────────
 function renderResults(data) {
     const f       = data.findings;
-    const overall = f.overall_severity.toLowerCase();
+    const overall = (f.overall_effective_severity || f.overall_severity).toLowerCase();
     const meta    = SEV_META[overall] || SEV_META.medium;
 
     document.getElementById('results-meta').textContent =
@@ -255,11 +256,12 @@ function renderResults(data) {
     </div>`).join('');
 
     const protoLabels = { sls: 'SLS nylon printing', fdm: 'FDM printing', resin: 'Resin (SLA) printing' };
+    const prodLabels = { injection_molding: 'Injection molding', resin_casting: 'Resin casting (urethane)' };
     const pullDir     = f.checks.draft_angle.pull_direction;
     document.getElementById('mfg-context').innerHTML = `
         <p class="panel-label">Manufacturing Context</p>
         <div class="mfg-row"><strong>Prototype method</strong>${protoLabels[f.prototype_method] || f.prototype_method}</div>
-        <div class="mfg-row"><strong>Production method</strong>Injection molding</div>
+        <div class="mfg-row"><strong>Production method</strong>${prodLabel}</div>
         <div class="mfg-row"><strong>Pull direction</strong>${pullDir} axis</div>`;
 
     const checks = Object.values(f.checks);

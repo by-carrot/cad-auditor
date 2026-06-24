@@ -39,6 +39,7 @@ def analyze(
     file: UploadFile = File(...),
     pull_direction: str = Form(default="Z"),
     prototype_method: str = Form(default="sls"),
+    production_method: str = Form(default="injection_molding"),
 ):
     """
     Accept an STL file, run all five DFM checks, apply two-stage labeling,
@@ -59,6 +60,12 @@ def analyze(
             status_code=422,
         )
 
+    if production_method.lower() not in ("injection_molding", "vacuum_casting", "slurry_casting"):
+        return JSONResponse(
+            {"success": False, "error": "production_method must be injection_molding, vacuum_casting, or slurry_casting"},
+            status_code=422,
+        )
+
     suffix = Path(file.filename).suffix.lower() if file.filename else ".stl"
     tmp_path = None
 
@@ -69,8 +76,8 @@ def analyze(
 
         mesh = load_stl(tmp_path, verbose=False)
         findings = run_all_checks(mesh, pull_direction=pull_direction.upper())
-        staged = apply_stage_labels(findings, prototype_method.lower())
-        interpretation = interpret_findings_staged(staged, prototype_method.lower())
+        staged = apply_stage_labels(findings, prototype_method.lower(), production_method.lower())
+        interpretation = interpret_findings_staged(staged, prototype_method.lower(), production_method.lower())
 
         return JSONResponse({
             "success": True,

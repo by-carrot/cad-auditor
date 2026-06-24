@@ -77,19 +77,22 @@ def build_user_message(findings: dict) -> str:
     """
     Serialize the findings dict into a readable message for the model.
 
-    Face index lists are stripped before serialization. The model needs
-    counts, percentages, and measurements, not raw geometry references.
+    Face index lists are stripped before serialization. Knowledge base
+    context is appended for checks that flagged high or medium severity.
 
     Parameters
     ----------
     findings : dict
-        Unified findings package from aggregate.run_all_checks().
+        Unified findings package from aggregate.run_all_checks(), optionally
+        staged by stage.apply_stage_labels().
 
     Returns
     -------
     str
-        Formatted user message string.
+        Formatted user message string with knowledge context appended.
     """
+    from src.knowledge.loader import build_context
+
     mesh = findings["mesh_summary"]
     overall = findings["overall_severity"]
     checks_stripped = _strip_face_indices(findings["checks"])
@@ -105,6 +108,8 @@ def build_user_message(findings: dict) -> str:
         f"Detailed findings:\n"
         f"{json.dumps(checks_stripped, indent=2)}"
     )
+
+    framing += build_context(findings, findings.get("production_method", "injection_molding"))
 
     return framing
 
@@ -150,38 +155,38 @@ def interpret_findings(findings: dict) -> str:
 
 
 
-STAGED_SYSTEM_PROMPT = """You are a senior injection molding DFM specialist reviewing a CAD \
-part analysis for an entrepreneur preparing to prototype and then manufacture their design.
+STAGED_SYSTEM_PROMPT = """You are a senior DFM specialist reviewing a CAD part analysis \
+for an entrepreneur preparing to prototype and then manufacture their design.
 
-The user is prototyping via {prototype_method_label} before targeting injection molding for \
-production. {prototype_method_label} tolerates zero draft angles, undercuts, and wall thickness \
-above {proto_min}mm. Injection molding is strict on all five checks.
+The user is prototyping via {prototype_method_label} and targeting {production_method_label} \
+for production. The findings include effective_severity fields that reflect what actually matters \
+for the chosen production method: for resin casting, draft violations are advisory and undercuts \
+are acceptable; for injection molding, all five checks apply strictly.
 
-Each finding in the data has a stage_relevance field: "prototype" or "both" means fix before the \
-prototype attempt; "production_only" means the prototype will succeed but injection molding will \
-fail or cost more.
+Each finding has stage_relevance: "prototype" or "both" means fix before prototyping; \
+"production_only" means the prototype will succeed but production will fail or cost more.
 
-Structure your response with exactly these four section headers on their own lines:
+Structure your response with exactly these four section headers:
 
 ## OVERALL ASSESSMENT
-2-3 sentences. State plainly whether the part is ready to prototype, ready for tooling, or \
-needs work at one or both stages.
+State plainly whether the part is ready to prototype and whether it needs work before \
+{production_method_label} production. Reference effective_severity, not raw severity.
 
 ## FIX BEFORE PROTOTYPING
-List only findings with stage_relevance "prototype" or "both". If none exist, write exactly: \
+Findings with stage_relevance "prototype" or "both". If none: write exactly: \
 No geometry issues will affect your {prototype_method_label} prototype.
 
-## FIX BEFORE PRODUCTION TOOLING
-List findings with stage_relevance "production_only" or "both". Reference actual measurements. \
-Be specific about what fails in production if left unfixed.
+## FIX BEFORE {production_method_label_upper} PRODUCTION
+Findings with stage_relevance "production_only" or "both" that have non-pass effective_severity. \
+Reference actual measurements. Be specific about production consequences.
 
 ## WHAT TO DO NEXT
-Concrete ordered steps. Label each step PRE-PROTOTYPE or PRE-TOOLING.
+Ordered steps labeled PRE-PROTOTYPE or PRE-PRODUCTION.
 
-Keep total response under 750 words. Reference actual measurements, not generic thresholds."""
+Keep under 750 words. Reference actual measurements, not generic thresholds."""
 
 
-def interpret_findings_staged(findings: dict, prototype_method: str) -> str:
+def interpret_findings_staged(findings: dict, prototype_method: str, production_method: str = "injection_molding") -> str:
     """
     Send staged DFM findings to Claude and return a two-stage interpretation.
 
@@ -207,10 +212,13 @@ def interpret_findings_staged(findings: dict, prototype_method: str) -> str:
 
     proto_label = findings.get("prototype_method_label", prototype_method)
     proto_min = findings.get("prototype_wall_min_mm", 0.8)
-
+    prod_label = findings.get("production_method_label", production_method.replace("_", " ").title())
+    
     system = STAGED_SYSTEM_PROMPT.format(
         prototype_method_label=proto_label,
         proto_min=proto_min,
+        production_method_label=prod_label,
+        production_method_label_upper=prod_label.upper(),
     )
 
     client = anthropic.Anthropic(api_key=api_key)
