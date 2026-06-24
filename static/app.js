@@ -1,6 +1,8 @@
-// ── State management ───────────────────────────────────────────
+import { initViewer, toggleLayer, resetCamera } from '/static/viewer.js';
+
+// ── State ──────────────────────────────────────────────
 const states = {
-    upload: document.getElementById('state-upload'),
+    upload:  document.getElementById('state-upload'),
     loading: document.getElementById('state-loading'),
     results: document.getElementById('state-results'),
 };
@@ -11,13 +13,14 @@ function showState(name) {
     window.scrollTo(0, 0);
 }
 
-// ── File selection ─────────────────────────────────────────────
+// ── File selection ─────────────────────────────────────
 const dropZone    = document.getElementById('drop-zone');
 const fileInput   = document.getElementById('file-input');
 const fileDisplay = document.getElementById('file-name-display');
 const analyzeBtn  = document.getElementById('analyze-btn');
 
 let selectedFile = null;
+let stlBuffer    = null;
 
 function handleFile(file) {
     if (!file || !file.name.toLowerCase().endsWith('.stl')) {
@@ -33,6 +36,12 @@ function handleFile(file) {
     fileDisplay.hidden = false;
     dropZone.classList.add('has-file');
     analyzeBtn.disabled = false;
+
+    // Read the buffer now so the 3D viewer has it after analysis completes.
+    // The server deletes the file; the browser holds this copy for rendering only.
+    const reader = new FileReader();
+    reader.onload = (e) => { stlBuffer = e.target.result; };
+    reader.readAsArrayBuffer(file);
 }
 
 fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
@@ -40,7 +49,6 @@ fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
 dropZone.addEventListener('click', (e) => {
     if (!e.target.classList.contains('file-btn')) fileInput.click();
 });
-
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', (e) => {
@@ -49,14 +57,14 @@ dropZone.addEventListener('drop', (e) => {
     handleFile(e.dataTransfer.files[0]);
 });
 
-// ── Loading progress ───────────────────────────────────────────
+// ── Loading progress ───────────────────────────────────
 const STEPS = [
-    { id: 'step-geometry',  label: 'Loading geometry…',                 ms: 3000 },
-    { id: 'step-draft',     label: 'Checking draft angles…',            ms: 4000 },
-    { id: 'step-thickness', label: 'Measuring wall thickness…',         ms: 4000 },
-    { id: 'step-undercut',  label: 'Detecting undercuts…',              ms: 4000 },
-    { id: 'step-features',  label: 'Analyzing rib and corner geometry…',ms: 4000 },
-    { id: 'step-interpret', label: 'Generating DFM assessment…',        ms: 99999 },
+    { id: 'step-geometry',  label: 'Loading geometry…',                  ms: 3000 },
+    { id: 'step-draft',     label: 'Checking draft angles…',             ms: 4000 },
+    { id: 'step-thickness', label: 'Measuring wall thickness…',          ms: 4000 },
+    { id: 'step-undercut',  label: 'Detecting undercuts…',               ms: 4000 },
+    { id: 'step-features',  label: 'Analyzing rib and corner geometry…', ms: 4000 },
+    { id: 'step-interpret', label: 'Generating DFM assessment…',         ms: 99999 },
 ];
 
 let progressTimer = null;
@@ -69,9 +77,7 @@ function startProgress() {
 }
 
 function advanceStep() {
-    if (stepIndex > 0) {
-        document.getElementById(STEPS[stepIndex - 1].id).className = 'step done';
-    }
+    if (stepIndex > 0) document.getElementById(STEPS[stepIndex - 1].id).className = 'step done';
     if (stepIndex >= STEPS.length) return;
     const step = STEPS[stepIndex];
     document.getElementById(step.id).className = 'step active';
@@ -84,7 +90,7 @@ function stopProgress() {
     STEPS.forEach(s => { document.getElementById(s.id).className = 'step done'; });
 }
 
-// ── Analysis request ───────────────────────────────────────────
+// ── Analysis ───────────────────────────────────────────
 analyzeBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
 
@@ -110,6 +116,15 @@ analyzeBtn.addEventListener('click', async () => {
         renderResults(data);
         showState('results');
 
+        // Init viewer after state is visible so canvas has layout dimensions.
+        if (stlBuffer) {
+            initViewer(
+                document.getElementById('dfm-canvas'),
+                stlBuffer,
+                data.findings
+            );
+        }
+
     } catch (err) {
         stopProgress();
         showState('upload');
@@ -117,32 +132,43 @@ analyzeBtn.addEventListener('click', async () => {
     }
 });
 
-// ── Reset ──────────────────────────────────────────────────────
+// ── Reset ──────────────────────────────────────────────
 document.getElementById('analyze-another').addEventListener('click', () => {
     selectedFile = null;
+    stlBuffer    = null;
     fileDisplay.hidden = true;
     dropZone.classList.remove('has-file');
     analyzeBtn.disabled = true;
     showState('upload');
 });
 
-// ── Render helpers ─────────────────────────────────────────────
+// ── Layer toggles ──────────────────────────────────────
+document.querySelectorAll('.layer-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        toggleLayer(btn.dataset.check, btn.classList.contains('active'));
+    });
+});
+
+document.getElementById('reset-cam').addEventListener('click', resetCamera);
+
+// ── Render helpers ─────────────────────────────────────
 const SEV_ORDER = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
 
 const SEV_META = {
-    high:         { dial: '🔴', label: 'HIGH SEVERITY',    desc: 'Significant issues require attention before proceeding.' },
-    medium:       { dial: '🟡', label: 'MEDIUM SEVERITY',  desc: 'Warnings to address before committing to tooling.' },
-    low:          { dial: '🟡', label: 'LOW SEVERITY',     desc: 'Minor issues. Review before tooling.' },
-    pass:         { dial: '✅', label: 'PASS',             desc: 'No significant DFM issues detected.' },
-    inconclusive: { dial: '⚪', label: 'INCONCLUSIVE',     desc: 'Some checks could not complete. Verify mesh quality.' },
+    high:         { dial: '🔴', label: 'HIGH SEVERITY',   desc: 'Significant issues require attention before proceeding.' },
+    medium:       { dial: '🟡', label: 'MEDIUM SEVERITY', desc: 'Warnings to address before committing to tooling.' },
+    low:          { dial: '🟡', label: 'LOW SEVERITY',    desc: 'Minor issues. Review before tooling.' },
+    pass:         { dial: '✅', label: 'PASS',            desc: 'No significant DFM issues detected.' },
+    inconclusive: { dial: '⚪', label: 'INCONCLUSIVE',    desc: 'Some checks could not complete. Verify mesh quality.' },
 };
 
 const CHECK_NAMES = {
-    draft_angle:          'Draft Angles',
-    wall_thickness:       'Wall Thickness',
-    undercuts:            'Undercuts',
-    rib_thickness_proxy:  'Rib Thickness',
-    sharp_corners:        'Sharp Corners',
+    draft_angle:         'Draft Angles',
+    wall_thickness:      'Wall Thickness',
+    undercuts:           'Undercuts',
+    rib_thickness_proxy: 'Rib Thickness',
+    sharp_corners:       'Sharp Corners',
 };
 
 function sevClass(s) { return `sev-${s.toLowerCase()}`; }
@@ -170,10 +196,10 @@ function extractMeasurement(check) {
 }
 
 function buildCheckCard(check) {
-    const sev = check.severity.toLowerCase();
+    const sev  = check.severity.toLowerCase();
     const meas = extractMeasurement(check);
     return `
-        <div class="check-card ${sevClass(sev)}">
+        <div class="check-card ${sevClass(sev)}" data-check="${check.category}">
             <div>
                 <div class="check-name">${CHECK_NAMES[check.category] || check.category}</div>
                 <div class="check-desc">${check.description}</div>
@@ -198,17 +224,15 @@ function parseAssessment(text) {
     return sections;
 }
 
-// ── Main render ────────────────────────────────────────────────
+// ── Main render ────────────────────────────────────────
 function renderResults(data) {
-    const f = data.findings;
+    const f       = data.findings;
     const overall = f.overall_severity.toLowerCase();
-    const meta = SEV_META[overall] || SEV_META.medium;
+    const meta    = SEV_META[overall] || SEV_META.medium;
 
-    // Header meta line
     document.getElementById('results-meta').textContent =
         `${data.file_name} · ${new Date().toLocaleDateString()}`;
 
-    // Severity banner
     const banner = document.getElementById('severity-banner');
     banner.className = `severity-banner ${sevClass(overall)}`;
     banner.innerHTML = `
@@ -218,30 +242,26 @@ function renderResults(data) {
             <div class="sev-desc">${meta.desc}</div>
         </div>`;
 
-    // Mesh summary
-    const m = f.mesh_summary;
+    const m  = f.mesh_summary;
     const bb = m.bounding_box_mm;
     document.getElementById('mesh-cards').innerHTML = [
-        { v: m.face_count.toLocaleString(),                           k: 'Faces' },
-        { v: `${bb.x}×${bb.y}×${bb.z} mm`,                          k: 'Bounding box' },
-        { v: m.is_watertight ? 'Yes' : 'No',                         k: 'Watertight' },
-        { v: m.surface_area_mm2.toLocaleString() + ' mm²',           k: 'Surface area' },
+        { v: m.face_count.toLocaleString(),           k: 'Faces' },
+        { v: `${bb.x}×${bb.y}×${bb.z} mm`,           k: 'Bounding box' },
+        { v: m.is_watertight ? 'Yes' : 'No',          k: 'Watertight' },
+        { v: m.surface_area_mm2.toLocaleString()+' mm²', k: 'Surface area' },
     ].map(c => `<div class="mesh-card">
         <div class="mesh-value">${c.v}</div>
         <div class="mesh-key">${c.k}</div>
     </div>`).join('');
 
-    // Manufacturing context panel
     const protoLabels = { sls: 'SLS nylon printing', fdm: 'FDM printing', resin: 'Resin (SLA) printing' };
-    const protoLabel = protoLabels[f.prototype_method] || f.prototype_method;
-    const pullDir = f.checks.draft_angle.pull_direction;
+    const pullDir     = f.checks.draft_angle.pull_direction;
     document.getElementById('mfg-context').innerHTML = `
         <p class="panel-label">Manufacturing Context</p>
-        <div class="mfg-row"><strong>Prototype method</strong>${protoLabel}</div>
+        <div class="mfg-row"><strong>Prototype method</strong>${protoLabels[f.prototype_method] || f.prototype_method}</div>
         <div class="mfg-row"><strong>Production method</strong>Injection molding</div>
         <div class="mfg-row"><strong>Pull direction</strong>${pullDir} axis</div>`;
 
-    // Sort and split checks into prototype vs production
     const checks = Object.values(f.checks);
     checks.sort((a, b) => (SEV_ORDER[a.severity.toLowerCase()] ?? 9) - (SEV_ORDER[b.severity.toLowerCase()] ?? 9));
 
@@ -257,16 +277,12 @@ function renderResults(data) {
     }
     document.getElementById('prod-cards').innerHTML = prod.map(buildCheckCard).join('');
 
-    // DFM assessment
     const sections = parseAssessment(data.interpretation);
-    if (sections.length > 0) {
-        document.getElementById('assessment-body').innerHTML = sections.map(s => `
+    document.getElementById('assessment-body').innerHTML = sections.length
+        ? sections.map(s => `
             <div class="assessment-block">
                 <div class="assessment-heading">${s.heading}</div>
                 <div class="assessment-text">${s.lines.join('\n').trim()}</div>
-            </div>`).join('');
-    } else {
-        document.getElementById('assessment-body').innerHTML =
-            `<div class="assessment-text">${data.interpretation}</div>`;
-    }
+            </div>`).join('')
+        : `<div class="assessment-text">${data.interpretation}</div>`;
 }
