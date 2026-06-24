@@ -1,0 +1,466 @@
+{
+  "draft_angle": {
+    "_source": "Industry standard DFM practice; SPI and VDI finish standards; Malloy, Plastic Part Design for Injection Molding, Hanser, 2nd ed. 2010",
+    "why_it_matters": "Draft angle is the taper on vertical walls that allows the part to release from the mold without friction during ejection. A mold opens along a single axis; any face parallel to that axis has zero draft and will drag against the steel on every cycle.",
+    "failure_modes": [
+      "Zero draft causes the part to seize in the mold cavity during ejection, requiring manual extraction and halting the production line.",
+      "Ejector pins pushing against an undrafted surface leave visible pin marks and can gouge the surface finish on every cycle.",
+      "Steel-on-steel drag accelerates tool wear, reducing mold life from the expected 500,000 to 1,000,000 cycles down to tens of thousands.",
+      "On textured surfaces, zero draft tears the texture pattern off the part during ejection, destroying the cosmetic finish."
+    ],
+    "thresholds": {
+      "polished_surface_min_degrees": 0.5,
+      "standard_surface_min_degrees": 1.0,
+      "lightly_textured_min_degrees": 3.0,
+      "heavily_textured_min_degrees": 5.0
+    },
+    "cost_of_ignoring": "Tooling revision to add draft requires re-machining the steel cavity, typically $3,000 to $8,000 per surface and two to four weeks of lead time. On a complex part this compounds quickly.",
+    "fixes": [
+      "Add draft in CAD by applying a taper to each flagged face relative to the pull direction. Most CAD tools have a dedicated draft feature.",
+      "If a vertical face is intentional for fit or function, discuss with your mold designer whether a shut-off or kiss-off can accommodate it.",
+      "For textured surfaces, confirm the required draft with your texture supplier before tooling is cut. EDM textures typically require 3 to 5 additional degrees."
+    ],
+    "collectible_specific": "For display objects, parting line placement determines where draft transitions are visible. Place the parting line on the base or rear face to hide it from the primary viewing angle. Draft running toward the parting line is invisible; draft running away from it produces a visible taper that affects silhouette."
+  },
+
+  "wall_thickness": {
+    "_source": "Protolabs Beginner's Guide to Injection Moulding; Protolabs Injection Moulding Defects guide; Malloy, Plastic Part Design for Injection Molding, Hanser, 2nd ed. 2010",
+    "why_it_matters": "Molten plastic flows from the gate through the cavity and freezes from the outside in. Walls that are too thin freeze before the cavity fills, producing a short shot. Walls that are too thick take longer to cool, causing the outer skin to solidify while the core is still molten, pulling inward and creating a sink mark or internal void.",
+    "failure_modes": [
+      "Walls below 1.5mm in standard ABS or PP risk short shots, where the flow front freezes before reaching the far end of the cavity.",
+      "Walls above 4mm in standard commodity plastics cool unevenly. The surface skins over while the core remains liquid, creating sink marks on the cosmetic face opposite a thick boss or rib.",
+      "Abrupt transitions between thick and thin sections create internal stress concentrations that appear as warpage after demolding.",
+      "Thick uncored sections significantly increase cycle time and material cost per part.",
+      "Very thin walls require higher injection pressure to fill, which can cause flash at parting lines and ejector pin locations."
+    ],
+    "thresholds_by_material": {
+      "abs": { "min_mm": 1.5, "max_mm": 4.0, "optimal_mm": 2.5 },
+      "polypropylene": { "min_mm": 0.8, "max_mm": 3.5, "optimal_mm": 2.0 },
+      "polycarbonate": { "min_mm": 1.0, "max_mm": 3.5, "optimal_mm": 2.5 },
+      "nylon_pa6": { "min_mm": 0.8, "max_mm": 3.0, "optimal_mm": 2.0 },
+      "tpe_elastomer": { "min_mm": 1.5, "max_mm": 5.0, "optimal_mm": 3.0 }
+    },
+    "transition_rule": "When transitioning between wall thicknesses, keep changes gradual at 40 to 60 percent ratios. Avoid abrupt steps; use tapers. Crystalline materials like nylon and PP shrink more than amorphous materials like ABS and PC, making uniform thickness even more critical for those resins.",
+    "cost_of_ignoring": "A sink mark on a cosmetic surface typically requires tooling rework to add steel (to thin the wall from the B-side), or a secondary operation like paint or texture to hide it. Rework costs $1,000 to $5,000. A short shot means the part is scrap on every cycle until the gate or runner is redesigned.",
+    "fixes": [
+      "Core out thick solid sections by adding internal pockets from the B-side of the mold. Doing this in the line of draw adds little or nothing to the mold cost.",
+      "For transitions between thick and thin sections, taper gradually over at least three times the thickness difference to avoid stress concentration.",
+      "Add ribs instead of increasing wall thickness when structural stiffness is needed. A ribbed 2mm wall is stiffer than a solid 4mm wall with less sink risk.",
+      "Ensure ribs and bosses do not create thick areas at their base. As a general rule, rib and boss walls should not exceed 60 to 70 percent of the adjacent nominal wall thickness."
+    ],
+    "collectible_specific": "Collectible form objects often have decorative bosses, logos, or raised text that create local thick spots. These are prime sink mark locations. Either core them from behind or accept a minor sink on the opposite face and place that face against a base or hidden surface."
+  },
+
+  "undercuts": {
+    "_source": "Protolabs DFM Guidelines for Injection Molding; Protolabs: Conquering Undercut Design Issues with Side-actions, Inserts, and Shut-offs",
+    "why_it_matters": "An undercut is any geometry that mechanically locks the part in the mold when it tries to open along the pull direction. The mold steel cannot pass through the part on opening, so additional moving tooling components are required to release it.",
+    "failure_modes": [
+      "An unaccommodated undercut physically prevents the mold from opening, destroying the part and potentially the tool on the first shot.",
+      "Side-action tooling that is not properly designed can clash with the ejector system, causing mechanical failure inside the mold.",
+      "Undercuts on cosmetic surfaces leave witness lines or parting marks at the edge of the side action, which are difficult to hide on display objects."
+    ],
+    "tooling_options": {
+      "side_action_slide": {
+        "description": "A steel block (also called a cam or side-pull) that slides laterally before the mold opens, clearing the undercut. Pin-actuated and moves based on the opening and closing of the mold. Most common solution.",
+        "cost_usd": "2000 to 8000 per action depending on complexity and size",
+        "lead_time_weeks": "2 to 4 additional"
+      },
+      "lifter": {
+        "description": "A pin or blade that moves at an angle during ejection to clear internal undercuts such as snap hooks.",
+        "cost_usd": "1000 to 3000 per lifter",
+        "lead_time_weeks": "1 to 2 additional"
+      },
+      "shut_off_pass_through_core": {
+        "description": "Two mold faces that come together to shut off flow and form undercut geometry without a separate moving component. Useful for through-holes and some snap features. Lower cost than a full side action.",
+        "cost_usd": "500 to 2000",
+        "lead_time_weeks": "1 additional"
+      },
+      "collapsible_core": {
+        "description": "A multi-piece core that collapses inward during ejection. Used for internal threads and complex internal features.",
+        "cost_usd": "5000 to 20000",
+        "lead_time_weeks": "4 to 8 additional"
+      },
+      "redesign_to_eliminate": {
+        "description": "Reorient features, add openings, or split the part to remove the undercut entirely. Zero tooling cost.",
+        "cost_usd": "0 in tooling, design time only"
+      }
+    },
+    "cost_of_ignoring": "Each unplanned side action discovered after tooling is cut adds $2,000 to $8,000 and two to four weeks. A complex part with five or six unplanned undercuts can double the tooling budget.",
+    "collectible_specific": "Many collectible form objects have intentional undercuts: interlocking assembly features, internal battery compartments, articulation joints. Before treating every undercut flag as a problem, categorize each one. Intentional undercuts already accommodated in your tooling design are not issues. The ones to act on are unintentional undercuts on surfaces you assumed would be simple pulls."
+  },
+
+  "rib_thickness_proxy": {
+    "_source": "Protolabs: Design Better Screw Bosses on Molded Parts; Protolabs Injection Moulding Defects guide; Malloy, Plastic Part Design for Injection Molding, Hanser, 2nd ed. 2010",
+    "why_it_matters": "Ribs are thin walls added perpendicular to a surface to increase structural stiffness without increasing the nominal wall thickness. If a rib is too thick relative to the wall it connects to, the additional mass at the base of the rib cools more slowly than the surrounding wall, pulling material inward and leaving a sink mark on the visible opposite face.",
+    "failure_modes": [
+      "A rib thicker than 60% of the nominal wall creates a local thick spot at its base that sinks the cosmetic surface on the opposite side.",
+      "Ribs without adequate draft (minimum 0.5 degrees per side) stick in the mold and are torn on ejection.",
+      "Ribs taller than three times their base thickness deflect under ejection force and can snap.",
+      "Deep ribs and tall standoffs require longer milling end mills and slower feedrates to machine, increasing tooling cost. Very deep features may also require vent holes to prevent gas trapping, short shots, or burning at the feature tip."
+    ],
+    "design_rules": {
+      "rib_to_wall_ratio_max": 0.6,
+      "rib_height_to_thickness_max": 3.0,
+      "min_draft_per_side_degrees": 0.5,
+      "fillet_at_base_min_mm": 0.5
+    },
+    "cost_of_ignoring": "Sink marks opposite ribs require either tooling rework (adding steel to thin the rib, $500 to $2,000 per rib location) or cosmetic masking through texture or paint. Neither is free.",
+    "fixes": [
+      "Reduce rib thickness to 60% or less of the nominal wall. If structural stiffness is still insufficient, add more ribs rather than thickening existing ones.",
+      "Add a radius at the base of each rib of at least 0.25mm, preferably 0.5mm, to reduce stress concentration and improve flow.",
+      "Apply 0.5 degrees of draft per side on all ribs to ensure clean ejection.",
+      "Use vertical ribs or gussets around the periphery of tall bosses or standoffs to support them structurally while keeping individual wall thickness within limits."
+    ]
+  },
+
+  "sharp_corners": {
+    "_source": "Protolabs Design Guidelines: Radii Added by machining process; Malloy, Plastic Part Design for Injection Molding, Hanser, 2nd ed. 2010",
+    "why_it_matters": "Sharp interior corners concentrate stress in both the plastic part and the mold steel. In the part, stress concentration leads to cracking at corners under mechanical load or thermal cycling. In the mold tool, sharp inside corners are difficult to machine cleanly and are the most common site for tool steel cracking under repeated injection pressure. Mold machining uses radial end mills; where a model shows a sharp interior corner, the machining process may add a radius automatically.",
+    "failure_modes": [
+      "Sharp corners in the plastic part act as crack initiation sites under impact or flexural loading, causing premature fracture.",
+      "Sharp inside corners in the mold steel create EDM electrode wear problems and are prone to chipping during high-cycle production.",
+      "Flow hesitation at sharp corners can create weld lines, visible as thin lines on the surface where two flow fronts meet."
+    ],
+    "recommended_radii": {
+      "internal_corners_min_mm": 0.5,
+      "internal_corners_recommended_mm": 1.5,
+      "external_corners_min_mm": 0.25
+    },
+    "cost_of_ignoring": "Adding fillets to mold steel after tooling is cut requires EDM or grinding of the cavity, typically $200 to $800 per corner location. On a part with many sharp corners this adds up quickly.",
+    "fixes": [
+      "Add fillets of at least 0.5mm to all internal corners. A 1.5mm fillet is preferred for corners under mechanical load.",
+      "For sharp external corners that are intentional for aesthetic reasons, confirm with your mold maker that a knife-edge is achievable in the tool steel and discuss the mold life implications.",
+      "Be aware that mold machining with radial end mills may automatically add small radii to sharp interior corners in the mold cavity. Review the tooling DFM report for any added radii that differ from your CAD model."
+    ]
+  },
+
+  "bosses": {
+    "_source": "Protolabs: Design Better Screw Bosses on Molded Parts (protolabs.com/resources/blog/design-better-screw-bosses-on-molded-parts); Protolabs: Designing Complex Injection Molding Features",
+    "why_it_matters": "Bosses are cylindrical protrusions used to locate screws, threaded inserts, or assembly alignment pins. They are among the most common sources of sink marks and knit line failures because they create local thick sections and force the plastic flow to split and rejoin around a core pin.",
+    "failure_modes": [
+      "A boss wall thicker than 60 to 70 percent of the adjacent nominal wall creates a thick mass at its base that sinks the cosmetic surface on the opposite face.",
+      "A boss located near the edge of a part creates a short knit line behind it. When a screw is driven in, the wedging force can crack the part along that short weld.",
+      "Tall bosses require deep mold features that are harder to machine, require longer end mills and slower feedrates, and may need vent holes to prevent gas trapping and short shots at the tip.",
+      "A boss angled away from the pull direction requires a hand-loaded insert or side action, adding significant tooling cost."
+    ],
+    "design_rules": {
+      "boss_wall_to_nominal_wall_max_ratio": 0.6,
+      "recommended_ratio_range": "60 to 70 percent of adjacent wall thickness",
+      "draft_min_degrees": 1.0,
+      "draft_for_tall_bosses_degrees": 3.0,
+      "fillet_at_base_min_mm": 0.5,
+      "preferred_location": "Away from part edges and away from cosmetic surfaces to minimize sink and knit line risk"
+    },
+    "cost_of_ignoring": "Sink marks on the cosmetic face opposite a boss typically require tooling rework ($500 to $2,000 per location) or secondary painting/texturing to hide. A cracked boss from a short knit line is a field failure that requires a redesign and new tooling run.",
+    "fixes": [
+      "Keep boss outer wall thickness at 60 to 70 percent of the nominal adjacent wall. Refer to your screw manufacturer's guidelines for the minimum hole diameter and surrounding wall thickness for the specific fastener.",
+      "Move bosses away from part edges so knit lines behind them are longer and structurally stronger.",
+      "Add gussets or vertical ribs around the periphery of tall bosses to allow thinner boss walls while maintaining structural support.",
+      "For deep screw holes (over 20mm), place the counterbore on the mating part rather than on the boss itself to allow the use of a straight steel core pin.",
+      "Keep bosses oriented along the pull direction. Angled bosses almost always require side actions."
+    ],
+    "collectible_specific": "Collectible objects often use bosses for internal assembly or base attachment. Locate them on the B-side (inside or base) and ensure the cosmetic A-side surface opposite each boss is not a primary display face. If the design has no B-side (a solid sculptural form), consider threaded heat-set inserts added as a secondary operation instead of molded bosses."
+  },
+
+  "weld_lines": {
+    "_source": "Protolabs: Knit Lines and How to Avoid Them (protolabs.com/resources/design-tips/knit-lines-and-how-to-avoid-them); Protolabs Injection Moulding Defects guide",
+    "why_it_matters": "A weld line (also called a knit line) forms wherever two separate flow fronts meet inside the mold cavity. The plastic at each flow front has cooled slightly during travel; when they meet, they bond imperfectly, leaving a visible seam and a local reduction in mechanical strength. Every hole, boss, and gate creates a flow split that eventually rejoins as a weld line.",
+    "failure_modes": [
+      "Weld lines in ABS are often visible as faint lines on the surface that read as cracks, creating cosmetic defects on display-facing surfaces.",
+      "Weld lines behind bosses are structurally weak because the line is short and immediately loaded by screw insertion wedge force.",
+      "Glass-filled or mineral-filled resins have significantly weaker weld lines than unfilled grades because the filler particles do not cross the weld boundary effectively.",
+      "Weld lines between two gates occur approximately midway between each gate pair. If a critical cosmetic or structural surface sits at that midpoint, it will show a weld line on every part.",
+      "Weld lines at the end of a long flow path are weaker than those near the gate because the plastic is cooler and lower pressure when the fronts meet."
+    ],
+    "where_weld_lines_form": [
+      "Behind every through-hole, boss core pin, or insert, where flow splits and rejoins on the downstream side.",
+      "Between gates: approximately halfway between each pair of gate locations when multiple gates are used.",
+      "At the end of narrow features or long flow paths where two fronts converge under low remaining pressure.",
+      "At abrupt wall thickness changes where the faster-flowing thin section and slower-flowing thick section meet."
+    ],
+    "cost_of_ignoring": "A cosmetic weld line on a display surface requires either relocating the gate (tooling modification, $500 to $3,000), adding a texture to mask the line, or painting the surface. A structural weld line behind a boss or at a stress point can cause field failures that require a full redesign.",
+    "fixes": [
+      "Move holes, bosses, and other flow-splitting features away from primary cosmetic surfaces and toward hidden interior areas so weld lines land on non-visible faces.",
+      "Avoid filled resins if the part has many features that create weld lines and cosmetic appearance is critical. Unfilled ABS or PC produce less visible weld lines.",
+      "Work with your mold designer to position the gate so weld lines form on the base, interior, or rear face rather than on the display face.",
+      "For parts with multiple gates, map where the halfway points are between each gate pair and confirm those locations are not cosmetic or structural critical zones.",
+      "Use flow simulation software or request a preliminary fill analysis from your mold maker before cutting steel to predict weld line locations."
+    ],
+    "collectible_specific": "Weld lines are one of the most common cosmetic failures on display objects because the flow-splitting features (bosses for assembly, holes for articulation pins, logo recesses) are often near the primary viewing face. Design the gate location first, then place flow-splitting features deliberately downstream and away from A-surfaces. A texture specification on the A-surface is the lowest-cost mitigation for minor weld lines that cannot be relocated."
+  },
+
+  "ejector_pins": {
+    "_source": "Protolabs: Using Ejector Pins Properly on Molded Parts (protolabs.com/resources/design-tips/using-ejector-pins-properly-on-molded-parts); Protolabs Beginner's Guide to Injection Moulding",
+    "why_it_matters": "Ejector pins are the mechanism that pushes the finished part out of the mold after cooling. They must contact the part surface with enough force to overcome adhesion to the steel, which means they always leave a mark. Pin placement is a collaboration between the part designer and the mold maker and must be signed off before tooling is finalized.",
+    "failure_modes": [
+      "Pins placed on cosmetic A-surfaces leave circular marks that are visible on the finished part.",
+      "Pins on surfaces without a flat pad perpendicular to the pin direction concentrate force on a tiny area, causing dents, surface blemishes, or part deformation.",
+      "Pins set too short (leaving a standing pad) create a local thick section that can cause sink on the opposite face if the pad is too thick.",
+      "Pins set too long (fully indented) create a thin spot in the plastic; if too thin, the pin can punch through on a short-shot cycle or leave a hole.",
+      "Parts with no suitable flat B-side surfaces (grates, thin ribs only) have no valid pin landing surface and require redesign or added boss pads."
+    ],
+    "pin_types": {
+      "center_cut": "Pin flush with the part surface. Most common. Leaves a circular mark at the nominal surface level.",
+      "shortest": "Pin slightly proud, leaving a standing pad. Creates a local thicker section. Risk of sink on opposite face if pad is too thick.",
+      "longest": "Pin fully indented below the surface. Creates a local thinner section. Risk of hole or short shot if the remaining wall is too thin."
+    },
+    "design_guidance": [
+      "Place ejector pins on the B-side (non-cosmetic interior) of the part. The mold half with more surface adhesion due to complex geometry becomes the B-side automatically.",
+      "Ensure there are flat surfaces on the B-side for pins to land against, perpendicular to the ejection direction. Parts with only ribs or grating on the B-side may need added boss pads.",
+      "For parts where no B-side is achievable (fully cosmetic sculptural forms), discuss post-gate ejection or LSR molding alternatives with your mold maker.",
+      "Pin locations are proposed by the manufacturer and require designer sign-off before tooling is cut. Review them against your cosmetic requirements before approving."
+    ],
+    "text_and_logo_guidance": {
+      "_source": "Protolabs Beginner's Guide to Injection Moulding",
+      "rules": [
+        "Use sans serif fonts at 20 point or larger for logos and text features. Serif fonts have thin strokes that may not fill completely or may not hold in the steel.",
+        "Minimum recommended feature depth or height is 0.25 to 0.38mm. Below this, the feature may not fill completely or may not be machinable in the steel.",
+        "Raised text (embossed) is generally easier to machine than recessed text (engraved) because raised text is cut into the B-side steel as a pocket rather than requiring a fragile steel protrusion.",
+        "Recessed text can be finer than raised text because the cavity is cut into solid steel rather than leaving fragile protrusions."
+      ]
+    },
+    "collectible_specific": "Collectible objects are often fully cosmetic with no natural B-side. The mold designer will determine B-side based on which geometry grips the mold more strongly. Communicate your A-surface priority list to the mold maker at the start of tooling design, not after, so pin placement decisions are made with your cosmetic hierarchy in mind."
+  },
+
+  "common_defects": {
+    "_source": "Protolabs: Injection Moulding Defects and How to Prevent Them (protolabs.com/en-gb/resources/blog/injection-moulding-defects-and-how-to-prevent-them)",
+    "sink_marks": {
+      "cause": "Thick sections cool more slowly than surrounding walls. The surface skins over while the core is still molten. The shrinking core pulls the skin inward, creating a depression.",
+      "common_locations": "Opposite ribs, bosses, and gussets. On the outside of any section thicker than the nominal wall.",
+      "prevention": "Core out thick areas to match nominal wall. Ensure ribs and bosses do not exceed 60 to 70 percent of nominal wall thickness. Core out in the line of draw to avoid adding tooling cost."
+    },
+    "flash": {
+      "cause": "Excess material escaping at parting lines, ejector pin channels, or vent slots. Caused by inadequate clamping force, mold half mismatch, or very thin walls requiring high injection pressure to fill.",
+      "prevention": "Keep parting lines as flat as possible. Avoid steep parting line faces that wear over repeated cycles. Do not use walls thinner than 0.8mm unless the material specifically supports it, as thin walls require pressure spikes that force material into gaps."
+    },
+    "short_shot": {
+      "cause": "Molten plastic cools and solidifies before fully filling the cavity. Caused by walls too thin for the flow length, insufficient venting causing gas traps, or inadequate injection pressure.",
+      "prevention": "Maintain walls above the minimum for your material. Ensure deep ribs and tall standoffs have adequate venting (often via ejector pin placement or dedicated vent slots). Gate as close to the longest flow path as possible."
+    },
+    "warpage": {
+      "cause": "Non-uniform cooling across the part creates differential shrinkage. One side shrinks more than the other and the part bends or twists after demolding. Most common in long flat parts with non-uniform wall sections.",
+      "prevention": "Maintain uniform wall thickness throughout. Crystalline resins (nylon, PP) are more prone to warpage than amorphous resins (ABS, PC) due to higher and more directional shrinkage. Symmetrical part geometry and balanced gate location reduce warpage risk."
+    }
+  }, 
+
+  "gate_types": {
+    "_source": "ZetarMold: Injection Mold Gate Types Practical Comparison Guide (zetarmold.com/injection-mold-gate-types); Sussex IM: Gate Types in Injection Molding (sussexim.com); GD Prototyping: Injection Molding Gate Types (gd-prototyping.com); Fictiv Injection Molding Design Guide",
+    "why_it_matters": "The gate is the passage point between the runner system and the mold cavity. Its type and location determine where the gate vestige appears on the finished part, how plastic flows through the cavity, where weld lines form, cycle time, and whether de-gating is manual or automatic. Gate selection is one of the first tooling decisions and one of the most consequential for cosmetic parts.",
+    "gate_selection_rules": [
+      "No cosmetic requirement and under 200,000 shots per year: start with an edge gate. It is the lowest-cost, easiest-to-modify option.",
+      "Gate must land on a hidden face and the resin shears cleanly (ABS, PP, HIPS): use a submarine (tunnel) gate. It auto-de-gates during ejection with no secondary operation.",
+      "Cosmetic surface anywhere near the gate: use a hot runner with a hot tip or valve gate. No exceptions. A visible gate mark on a display surface cannot be removed without secondary painting.",
+      "Large flat part prone to warpage: use a fan gate. Its wide fill front reduces internal stress and directional shrinkage.",
+      "Highest cosmetic requirement with zero acceptable gate mark: hot runner valve gate. The mechanical pin closes before the plastic freezes, leaving a flush flat mark instead of a small dimple."
+    ],
+    "gate_types_detail": {
+      "edge_gate": {
+        "description": "Rectangular gate at the parting line, feeding the side of the part. Simple and inexpensive to machine.",
+        "vestige": "Visible mark on the part edge requiring manual trimming.",
+        "best_for": "Non-cosmetic industrial parts, prototypes, thick flat sections.",
+        "not_for": "Parts where the edge is a primary cosmetic surface.",
+        "cost": "Lowest tooling cost. Widening or deepening after steel is cut takes one to two hours of machine time."
+      },
+      "submarine_tunnel_gate": {
+        "description": "Angled channel below the parting line that fills the cavity from underneath. The gate shears automatically during part ejection.",
+        "vestige": "Small mark on a non-visible surface or the base of the part. No secondary de-gating operation needed.",
+        "best_for": "High-volume production of cosmetically demanding consumer parts where the gate mark can be hidden on the B-side or base.",
+        "not_for": "Glass-filled or brittle resins. Glass fibers crack at the shear point during auto-ejection. Polycarbonate can also be problematic due to gate geometry and shear sensitivity.",
+        "cost": "Moderate. More complex to machine than an edge gate. Relocating after steel is cut requires filling the tunnel with a steel insert and re-machining."
+      },
+      "fan_gate": {
+        "description": "Edge gate that widens into a fan shape from the runner to the cavity, spreading flow evenly across a wide entry.",
+        "vestige": "Long gate mark along the entry edge requiring manual trimming. More difficult to trim cleanly than a standard edge gate.",
+        "best_for": "Large, flat thin-walled parts prone to warpage. Spreads shear load and reduces directional fiber orientation in filled resins.",
+        "not_for": "Small parts or tight spaces."
+      },
+      "hot_tip_gate": {
+        "description": "Part of a hot runner system. A heated nozzle tip keeps plastic molten until the shot. Leaves a small raised dimple of 0.3 to 0.5mm on the part surface.",
+        "vestige": "Small dimple. Acceptable for most consumer products when placed on a low-visibility surface.",
+        "best_for": "Cosmetic parts where a small mark is acceptable. Eliminates runner scrap and runner trimming.",
+        "not_for": "Applications requiring a perfectly flat surface at the gate location.",
+        "cost": "Adds $3,000 to $8,000 to tooling for the hot runner manifold and nozzles."
+      },
+      "valve_gate": {
+        "description": "Hot runner gate with a mechanical pin that closes before the plastic freezes, leaving a flush flat mark. The highest cosmetic standard achievable.",
+        "vestige": "Near-flush circular mark, typically indistinguishable from the surrounding surface.",
+        "best_for": "Highest cosmetic requirement where even a small dimple is unacceptable.",
+        "cost": "Adds $700 to $2,000 per gate drop on top of the hot runner manifold cost. Requires periodic valve pin maintenance."
+      }
+    },
+    "cost_of_wrong_gate": "Changing gate type after tooling is cut ranges from simple to very expensive. Widening or deepening an edge gate is one to two hours of machine time. Relocating a submarine gate requires re-machining a significant cavity section. Converting from cold runner to hot runner requires building a new manifold and new channels, typically costing 40 to 80 percent of the original tooling cost.",
+    "collectible_specific": "For display objects and collectibles, the gate vestige is a first-order cosmetic concern. The vestige cannot be fully removed without painting or secondary machining. Design the part so the gate lands on the base or rear interior surface from the start. Do not accept a gate location on a primary display face and plan to paint over it; that creates a color-match dependency on every production run. Communicate your A-surface priority list to the mold designer before they propose gate location, not after."
+  },
+
+  "runner_systems": {
+    "_source": "Fictiv: Hot Runner vs Cold Runner Molds (fictiv.com/articles/hot-runner-vs-cold-runner-molds); Xometry: Hot Runner vs Cold Runner (xometry.com/resources/injection-molding/hot-runner-vs-cold-runner); Vital Plastics (vitalplastics.com/resources/runner-systems-comparison)",
+    "why_it_matters": "The runner system is the network of channels that carries molten plastic from the machine nozzle to the gate and into the cavity. The choice between cold runner and hot runner affects tooling cost, material waste, cycle time, process stability, and gate type options. It is a permanent tooling decision that is expensive to change.",
+    "cold_runner": {
+      "description": "Unheated channels machined into the mold parting line. Plastic in the runner solidifies each cycle and is ejected along with the part as scrap called a runner slug.",
+      "advantages": [
+        "Lower upfront tooling cost. No heated manifold, no temperature controllers, no specialized components.",
+        "Works with virtually all thermoplastic materials including heat-sensitive resins that degrade in a hot runner manifold.",
+        "Simpler maintenance and lower technical risk.",
+        "Easier to modify gate location and runner geometry after initial trials."
+      ],
+      "disadvantages": [
+        "Produces runner scrap on every cycle. Runner must be manually trimmed or broken from the part, adding labor cost and cycle time.",
+        "Runner scrap can be reground and reused, but regrind material has slightly degraded properties. For cosmetic and structural parts, a controlled regrind percentage must be specified.",
+        "Longer cycle time because the runner must cool and solidify before the mold opens.",
+        "Part-to-part consistency can be slightly affected by runner variability."
+      ],
+      "best_for": "Low-volume production, first-time tooling, materials that cannot tolerate prolonged heat exposure, prototyping runs."
+    },
+    "hot_runner": {
+      "description": "A heated manifold plate keeps plastic molten from the machine nozzle all the way to the gate. No runner slug is produced. Plastic goes directly from the nozzle into the cavity.",
+      "advantages": [
+        "Zero runner scrap. Significant material cost savings at high volume.",
+        "Shorter cycle time because cooling only applies to the part, not a runner slug.",
+        "Better process control. Temperature and pressure can be tuned per drop.",
+        "Enables cleaner gate options (hot tip, valve gate) that are not available with cold runners.",
+        "Supports balanced fill in multi-cavity tools without the runner balancing effort required in cold runners."
+      ],
+      "disadvantages": [
+        "Higher upfront tooling cost: $3,000 to $8,000 additional for a standard single-drop system, more for multi-drop.",
+        "Not all materials work well. Heat-sensitive resins including PVC and some TPEs can degrade in the manifold if residence time is too long.",
+        "Requires temperature controller maintenance. A failed heater zone stops production until repaired.",
+        "Harder to modify gate location after tooling. The manifold channels are drilled into a heated plate."
+      ],
+      "best_for": "High-volume production above 50,000 parts per year where material savings and cycle time reduction justify the upfront cost. Cosmetically demanding parts that require hot tip or valve gate."
+    },
+    "decision_framework": "For a first-time entrepreneur at low volume (under 10,000 parts in the first run), start with a cold runner. The upfront savings are real and the tooling is easier to modify after first article review. If the volume scales to 50,000 parts per year or more, the material and cycle time savings from a hot runner typically recover the additional tooling cost within one to two production runs. Discuss the volume trajectory with your mold maker before committing so they can design the tool to accept a hot runner retrofit without a full rebuild.",
+    "collectible_specific": "Collectibles and display objects typically run in lower volumes (hundreds to a few thousand units initially). A cold runner with a submarine gate is usually the right starting point. If the product proves out and volume increases, consider hot runner conversion at the next tooling revision. Do not over-invest in hot runner tooling for a first production run at unknown volume."
+  },
+
+  "venting": {
+    "_source": "Weilin Plastic: How to Design the Venting System in an Injection Mold (weilinplastic.com/injection-mold-venting-design-guide); Jeekmould: Injection Molding Venting (jeekmould.com/blog/injection-molding-venting); Kehui Mold: Injection Mold Venting Design (kehuimold.com/mold-venting-design); Weilin Plastic DFM Guide",
+    "why_it_matters": "Every mold cavity starts full of air. When molten plastic enters, that air must escape or it becomes trapped. Trapped air compresses, heats up by the same mechanism as a diesel engine, and resists the incoming material. The result is burn marks, short shots, weak weld lines, and dimensional instability. Poor venting is one of the most common causes of defects that look like process problems but are actually tooling problems.",
+    "failure_modes": [
+      "Burn marks: dark or black streaks at the last areas to fill. The air heats to combustion temperature under compression. Classic sign of inadequate venting.",
+      "Short shots: compressed air back-pressure is too high for the plastic to overcome. The part does not fill completely in the last-to-fill zone.",
+      "Weak weld lines: poor venting at flow fronts prevents complete fusion where two flow streams meet. The weld line is structurally weaker than normal.",
+      "Sink marks and voids: trapped gas prevents the packing pressure needed to compensate for shrinkage in thick sections.",
+      "Dimensional instability: when venting is inconsistent cycle to cycle, fill pressure shifts unpredictably, causing dimensional variation. Parts that appear to have unstable dimensions often actually have a venting problem.",
+      "Mold steel erosion: compressed hot gas corrodes the cavity surface at trap locations over thousands of cycles, shortening mold life."
+    ],
+    "where_traps_occur": [
+      "End of fill: the last zone to fill is always the most at risk. Air pushed ahead of the flow front has nowhere to go.",
+      "Deep ribs and tall standoffs: narrow, deep features trap air at the tip. This is why the rib entry notes that vent holes are sometimes added inside tall features.",
+      "Blind pockets: any enclosed volume with no escape path for air will trap.",
+      "Complex shut-off regions: areas where mold steel faces meet at an angle trap air between the steel surfaces.",
+      "Areas between two flow fronts: weld line zones where two fronts meet compress the air caught between them."
+    ],
+    "design_guidance_for_part_designers": [
+      "Avoid designing deep blind pockets with only one entry path. Where possible, add a through-hole or opening so air can escape from the far end.",
+      "Keep ribs at reasonable height-to-width ratios (3:1 maximum) so the mold maker can vent the tip via ejector pin clearances or vent channels.",
+      "Orient the part so the last-to-fill zone is at the parting line or on a surface with ejector pins. Venting options are most available at those locations.",
+      "When discussing the DFM review with your mold maker, identify which end of the part fills last and confirm that vents are planned there.",
+      "During first article trials, short shots (deliberately underfilled shots at reduced volume) reveal where the last-to-fill areas are. Insist on seeing short shots before the mold is approved."
+    ],
+    "diagnosis": "If burn marks or short shots appear consistently in the same location and do not improve when injection speed, temperature, or pressure are adjusted, the cause is almost certainly venting, not process. A true venting problem keeps returning in the same area regardless of process changes. Communicate this pattern to your mold maker immediately rather than continuing to push process parameters.",
+    "collectible_specific": "Collectible form objects often have deep sculptural recesses, internal cavity structures, and tight geometric features that create natural air traps. When reviewing your CAD before tooling, mentally trace the flow path from the gate to the farthest point in the part. Every deep pocket along that path that does not have an exit for air is a potential burn mark or short shot location. Flag these for your mold designer at the start of the DFM review."
+  },
+
+  "surface_finish_standards": {
+    "_source": "Xometry: Injection Molding Surface Finishes SPI VDI Mold-Tech (xometry.com/resources/injection-molding/choosing-the-right-finish); Evokpoly: Injection Molding Surface Finish Complete SPI Guide (evokpoly.com/feeds/blog/injection-molding-surface-finish); RP Proto: SPI Surface Finish Standards (rpproto.com/blog/injection-molding-surface-finish-standards-spi); DfM Engineering: Injection Moulding Surface Finish Design Guide",
+    "why_it_matters": "Surface finish is specified on the mold, not on the part. The mold surface transfers directly to every part produced. Finish specification is permanent once the mold is textured or polished: changing finish after tooling requires reworking the steel. The choice of finish also directly determines required draft angles and material compatibility, making it a decision that must be made before tooling, not after.",
+    "spi_grades": {
+      "A_series_glossy": {
+        "grades": "A1, A2, A3",
+        "method": "Diamond buffing. A1 is finest, A3 is slightly less refined.",
+        "appearance": "Mirror-like to high-gloss. A1 is used for optical components. A2 is the most common high-gloss finish for cosmetic consumer parts. A3 is suitable for non-optical premium appearance.",
+        "draft_requirement": "Requires 1 to 3 degrees more draft than a standard machined surface to overcome the vacuum suction effect during ejection from a polished cavity.",
+        "material_compatibility": "ABS and PC replicate A-series finishes well. Semi-crystalline materials like PP, HDPE, and nylon cannot achieve true mirror gloss due to their crystalline structure and higher shrinkage. Glass-filled materials show fiber print-through, making A-series unsuitable.",
+        "cost": "Most expensive mold preparation. Requires specialty polishing in a dust-free environment.",
+        "not_compatible_with": "Polycarbonate with SPI D2 or D3 textures simultaneously (material-finish mismatch; PC cannot replicate coarse blast textures)."
+      },
+      "B_series_semi_gloss": {
+        "grades": "B1, B2, B3",
+        "method": "Sandpaper finishing. B2 (400 grit) is the industry workhorse for the majority of consumer products.",
+        "appearance": "Semi-gloss to low sheen. Hides minor flow lines and machining marks. B2 is the default finish when no specific appearance is required.",
+        "draft_requirement": "Standard draft (1 degree minimum) is sufficient.",
+        "cost": "Moderate. Most cost-effective for general-purpose consumer products."
+      },
+      "C_series_matte": {
+        "grades": "C1, C2, C3",
+        "method": "Stone finishing.",
+        "appearance": "Matte. Hides flow lines, minor sink marks, and weld lines more effectively than B-series. Suitable for grip surfaces and functional industrial parts.",
+        "draft_requirement": "Standard draft sufficient."
+      },
+      "D_series_textured": {
+        "grades": "D1, D2, D3",
+        "method": "Bead blasting with glass beads (D1) or aluminum oxide (D2, D3). D3 is the coarsest.",
+        "appearance": "Rough matte texture. D-series hides virtually all cosmetic defects including significant sink marks.",
+        "draft_requirement": "Requires 1.5 degrees of additional draft per 0.001 inch of texture depth. D3 often requires 3 to 5 degrees minimum. Insufficient draft with D-series tears the texture surface during ejection.",
+        "material_compatibility": "Do not specify D2 or D3 with polycarbonate. PC cannot replicate these textures properly.",
+        "sink_mark_hiding": "The coarsest grade that hides the most defects. A legitimate strategy for a first-time tooling run where surface imperfections are expected."
+      }
+    },
+    "vdi_3400": {
+      "description": "German EDM (electrical discharge machining / spark erosion) texture standard. Produces a fine-to-coarse grain depending on grade selection. VDI 12 is very fine, VDI 45 is very coarse. Applied via EDM machining of the cavity surface.",
+      "draft_rule": "Same draft requirement as SPI D-series: 1.5 degrees additional per 0.001 inch of texture depth.",
+      "near_equivalents": "SPI D-3 is approximately equivalent to VDI 33, which is approximately equivalent to Mold-Tech MT-11020."
+    },
+    "mold_tech": {
+      "description": "Proprietary texture system from Mold-Tech with over 500,000 patterns including leather grains, wood grains, geometric patterns, fabric textures, and custom designs. Applied via chemical etching, laser etching, or hand-finishing.",
+      "draft_rule": "Add 1.5 degrees of draft for every 0.001 inch of texture depth. Mold-Tech recommends this rule for all their texture grades. A texture that is 0.003 inch deep requires 4.5 additional degrees of draft.",
+      "application": "Most commonly used in the A and B series of Mold-Tech for fine to medium matte finishes that do not require laser or chemical etching."
+    },
+    "decision_framework": "Specify surface finish before tooling is cut. It affects draft angles (which affect the entire mold design), material compatibility, and polishing cost. A common trap is designing a part with standard 1-degree draft and then specifying a textured D-series finish, which requires 3 to 5 degrees. The mold must then be reworked to add draft, which costs $2,000 to $8,000 and adds weeks. The sequence is: select finish grade first, determine required draft from that grade, then design the part.",
+    "collectible_specific": "For display objects, A2 or B1 on primary display faces (front, top) with B2 or C1 on secondary faces is a common and cost-effective specification. D-series on the base and interior is useful on a first tooling run because it hides any sink marks that appear opposite undetected thick sections. Parting lines on textured surfaces are less visible than on glossy surfaces, which is an additional argument for placing parting lines on textured faces."
+  },
+
+  "secondary_operations": {
+    "_source": "Protolabs Design Guidelines and Secondary Operations (protolabs.com/services/injection-molding/plastic-injection-molding/design-guidelines); Fictiv Injection Molding Design Guide: Secondary Operations; Seasky Medical: What Secondary Operations Are Offered After Injection Molding (seaskymedical.com); Fathom Injection Molding Post-Processing",
+    "why_it_matters": "Secondary operations are post-mold steps that add branding, improve surface appearance, enable assembly, or add functional hardware. They are common in collectibles and consumer products, and planning for them during part design avoids expensive redesigns later. Secondary operations add per-part cost, lead time, and supply chain steps, so they should be planned deliberately rather than treated as a fallback.",
+    "operations": {
+      "pad_printing": {
+        "description": "Transfers a two-dimensional image (logo, graphic, text, part number) onto a three-dimensional object using a silicone pad. The pad conforms to curved and irregular surfaces, making it uniquely suited for injection-molded parts with compound geometry.",
+        "applications": "Logos, branding, color accents, icons, QR codes, serial numbers on curved surfaces.",
+        "cost_per_part": "$0.25 to $2.00 depending on color count and surface complexity.",
+        "design_considerations": "The surface being printed must be sufficiently flat or gradually curved for the pad to contact consistently. Very tight recesses and extremely compound curves may not be reachable. ABS and PC accept pad print inks well with minimal surface preparation. PP and PE require surface treatment (flame or corona) to achieve adequate ink adhesion.",
+        "limitations": "Pad printing is single-color per pass. Multi-color graphics require multiple passes with careful registration. Fine detail below 0.2mm line width may not replicate consistently."
+      },
+      "screen_printing": {
+        "description": "Pushes ink through a mesh stencil onto the part surface. Higher resolution and ink opacity than pad printing for flat surfaces.",
+        "applications": "Graphics on flat or gently cylindrical surfaces. Higher volume applications where registration consistency is important.",
+        "limitations": "Cannot print on compound curves. Not suitable for convex or highly irregular surfaces."
+      },
+      "painting": {
+        "description": "Spray painting the part surface, typically with a primer coat followed by color coat and optionally a clear coat for protection.",
+        "applications": "Achieves colors and surface effects not possible in resin (metallics, color shifts, translucency effects). Hides cosmetic defects including minor sink marks, flow lines, and weld lines. Common for collectibles targeting premium appearance.",
+        "cost_per_part": "$1.00 to $5.00 for basic single-color paint, more for specialty effects.",
+        "design_considerations": "ABS accepts paint adhesion with minimal preparation. PP and PE require primer specifically formulated for polyolefins. The part surface must be B-series or rougher: painting over an A-series gloss surface produces poor adhesion without sanding or chemical etching first. Paint adds 0.05 to 0.15mm to exterior dimensions; account for this on assembly mating features.",
+        "limitations": "Adds a supply chain step and per-part cost. Color consistency across production runs depends on the paint supplier's batch control. Touch-up repair of chipped paint in the field is difficult on small form objects."
+      },
+      "laser_etching_engraving": {
+        "description": "A laser burns a pattern directly into the part surface or the mold surface. Applied to mold: permanent feature that appears on every part. Applied to finished part: post-mold operation for variable data (serial numbers, date codes, QR codes).",
+        "applications": "Part identification, tamper evidence, decorative texture effects, variable data encoding.",
+        "cost_per_part": "$0.50 to $3.00 for post-mold laser etching."
+      },
+      "heat_set_brass_inserts": {
+        "description": "Threaded metal inserts installed into the plastic part after molding using a heated probe (heat staking) or ultrasonic welder. The heat melts the surrounding plastic, which flows into the insert's knurled exterior and solidifies to lock it in place.",
+        "applications": "Any boss that requires repeated assembly and disassembly with a screw. Plastic threads strip after approximately 3 to 10 cycles of fastener installation depending on material; metal inserts withstand hundreds of cycles.",
+        "cost_per_insert": "$0.25 to $1.50 for standard brass inserts plus equipment setup cost.",
+        "design_considerations": "The boss hole diameter must match the insert manufacturer's specification exactly for each insert size. The surrounding wall thickness must provide enough plastic to flow into and retain the insert without cracking. Boss depth must accommodate the full insert length plus 0.5mm of plastic below the insert tip.",
+        "alternatives": "In-mold inserts (placed in the mold before injection) achieve stronger mechanical retention because the plastic flows directly around the insert without a secondary operation, but require manual insert loading per cycle and are slower. Heat-set is preferred for moderate volumes."
+      },
+      "ultrasonic_welding": {
+        "description": "Joins two plastic parts permanently by applying high-frequency vibration that generates friction heat at the joint surface, melting and fusing the plastic.",
+        "applications": "Permanently sealing two-piece enclosures, battery doors, snap-fit assemblies that must be tamper-resistant.",
+        "design_considerations": "Requires an energy director: a raised triangular or circular feature molded into the joint face of one part that focuses the vibration energy. The mold must include this feature. Like materials weld most reliably: ABS to ABS, PC to PC. Dissimilar materials may not achieve full strength. The joint design is permanent; plan for it deliberately rather than adding it as an afterthought.",
+        "cost": "Equipment capital cost is significant but per-part labor is low in production."
+      },
+      "chrome_and_metallic_plating": {
+        "description": "Electroplating or vacuum metallizing applies a thin metallic layer to the plastic surface to achieve a metallic appearance without metal tooling costs.",
+        "applications": "Premium visual effects, metallic accents, mirror surfaces on display objects.",
+        "design_considerations": "Electroplating requires ABS or ABS alloys because the chrome adhesion process relies on the resin's microstructure. PP and PC plate poorly without specialty processes. Vacuum metallizing (PVD) works on more materials but requires a smooth base surface for good reflectivity. Plated surfaces require a clear coat for durability.",
+        "cost": "$5 to $20 per part for electroplating depending on size and geometry complexity.",
+        "limitations": "Not compatible with parts requiring dimensional precision at plated interfaces: plating adds 0.01 to 0.03mm to exterior dimensions."
+      }
+    },
+    "planning_guidance": "Plan secondary operations at the same time as mold design, not after. Painting requires attention to draft (paint over undrafted edges peels), adhesion surface prep, and dimensional allowances. Pad printing requires flat enough surfaces. Inserts require boss geometry sized to spec. Ultrasonic welding requires energy director geometry in the mold. None of these are add-ons that can be retrofitted without redesign cost.",
+    "collectible_specific": "Most production collectibles use some combination of painting for base color, pad printing for fine graphic detail, and heat-set inserts at any screw attachment point. For a first production run, consider designing the part to accept all three from the start even if you do not use them all immediately. Adding an insert boss later requires a tooling modification."
+  }
+}
+
