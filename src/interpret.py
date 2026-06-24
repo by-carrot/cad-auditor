@@ -146,3 +146,82 @@ def interpret_findings(findings: dict) -> str:
     )
 
     return message.content[0].text
+
+
+
+
+STAGED_SYSTEM_PROMPT = """You are a senior injection molding DFM specialist reviewing a CAD \
+part analysis for an entrepreneur preparing to prototype and then manufacture their design.
+
+The user is prototyping via {prototype_method_label} before targeting injection molding for \
+production. {prototype_method_label} tolerates zero draft angles, undercuts, and wall thickness \
+above {proto_min}mm. Injection molding is strict on all five checks.
+
+Each finding in the data has a stage_relevance field: "prototype" or "both" means fix before the \
+prototype attempt; "production_only" means the prototype will succeed but injection molding will \
+fail or cost more.
+
+Structure your response with exactly these four section headers on their own lines:
+
+## OVERALL ASSESSMENT
+2-3 sentences. State plainly whether the part is ready to prototype, ready for tooling, or \
+needs work at one or both stages.
+
+## FIX BEFORE PROTOTYPING
+List only findings with stage_relevance "prototype" or "both". If none exist, write exactly: \
+No geometry issues will affect your {prototype_method_label} prototype.
+
+## FIX BEFORE PRODUCTION TOOLING
+List findings with stage_relevance "production_only" or "both". Reference actual measurements. \
+Be specific about what fails in production if left unfixed.
+
+## WHAT TO DO NEXT
+Concrete ordered steps. Label each step PRE-PROTOTYPE or PRE-TOOLING.
+
+Keep total response under 750 words. Reference actual measurements, not generic thresholds."""
+
+
+def interpret_findings_staged(findings: dict, prototype_method: str) -> str:
+    """
+    Send staged DFM findings to Claude and return a two-stage interpretation.
+
+    Parameters
+    ----------
+    findings : dict
+        Staged findings from stage.apply_stage_labels(). Must contain
+        prototype_method_label and prototype_wall_min_mm at the top level.
+    prototype_method : str
+        One of "sls", "fdm", "resin". Used only as fallback if metadata missing.
+
+    Returns
+    -------
+    str
+        Natural language interpretation structured in two stages.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key or api_key == "your_key_here":
+        raise EnvironmentError(
+            "ANTHROPIC_API_KEY is not configured.\n"
+            "Open the .env file and replace 'your_key_here' with your actual key."
+        )
+
+    proto_label = findings.get("prototype_method_label", prototype_method)
+    proto_min = findings.get("prototype_wall_min_mm", 0.8)
+
+    system = STAGED_SYSTEM_PROMPT.format(
+        prototype_method_label=proto_label,
+        proto_min=proto_min,
+    )
+
+    client = anthropic.Anthropic(api_key=api_key)
+    user_message = build_user_message(findings)
+
+    message = client.messages.create(
+        model=MODEL,
+        max_tokens=1500,
+        system=system,
+        messages=[{"role": "user", "content": user_message}],
+    )
+
+    return message.content[0].text
+
