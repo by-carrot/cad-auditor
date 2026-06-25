@@ -606,3 +606,32 @@ body {
 
 /* ── Viewport section needs position:relative for legend ──────── */
 .viewport-section { position: relative; }
+
+
+/* ── Severity filter slider ───────────────────────────────────── */
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.filter-label {
+    font-size: 11px;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.severity-slider {
+    width: 90px;
+    accent-color: var(--accent, #2563eb);
+    cursor: pointer;
+}
+
+.filter-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #cbd5e1;
+    min-width: 28px;
+    text-align: right;
+}

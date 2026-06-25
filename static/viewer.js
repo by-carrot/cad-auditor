@@ -35,6 +35,8 @@ let baseColors;
 // measurement is angle in degrees (draft) or alignment score (undercuts).
 let faceMap = new Map();
 let activeLayers = new Set(['draft_angle', 'undercuts']);
+let severityFilter  = 1.0;   // 1.0 = show all, 0.05 = worst 5% only
+let filterThresholds = {};   // {checkName: cutoff_measurement}
 let thresholds = { draft_angle: 1.0, undercuts: -0.259 };
 
 let tooltip = null;
@@ -68,8 +70,6 @@ function gradientColor(checkName, measurement) {
 
 function rebuildColors() {
     const attr = geo.attributes.color;
-
-    // Fill base: gray normally, background color in isolation mode
     const fill = isolationMode ? ISOLATION_HIDE : BASE_COLOR;
     for (let i = 0; i < attr.array.length; i += 3) {
         attr.array[i]     = fill.r;
@@ -77,11 +77,55 @@ function rebuildColors() {
         attr.array[i + 2] = fill.b;
     }
 
-    // Then paint flagged faces on top
-    for (const [faceIdx, checkMeasures] of faceMap) { ... }
+    for (const [faceIdx, checkMeasures] of faceMap) {
+        let chosen = null;
+        for (const name of PRIORITY) {
+            if (!checkMeasures.has(name) || !activeLayers.has(name)) continue;
+            const measurement = checkMeasures.get(name);
+            if (!facePassesFilter(name, measurement)) continue;
+            chosen = gradientColor(name, measurement);
+            break;
+        }
+        if (!chosen) continue;
+
+        for (let v = 0; v < 3; v++) {
+            const i = (faceIdx * 3 + v) * 3;
+            attr.array[i]     = chosen.r;
+            attr.array[i + 1] = chosen.g;
+            attr.array[i + 2] = chosen.b;
+        }
+    }
     attr.needsUpdate = true;
 }
 
+
+function computeFilterThresholds(ratio) {
+    filterThresholds = {};
+    for (const checkName of PRIORITY) {
+        const measurements = [];
+        for (const checkMeasures of faceMap.values()) {
+            if (checkMeasures.has(checkName)) {
+                measurements.push(checkMeasures.get(checkName));
+            }
+        }
+        if (!measurements.length) continue;
+
+        // Both draft (angle) and undercuts (alignment) are most severe
+        // at the lowest values, so sorting ascending and taking the
+        // bottom ratio% captures the worst faces for both checks.
+        measurements.sort((a, b) => a - b);
+        const cutoffIdx = Math.min(
+            Math.ceil(measurements.length * ratio) - 1,
+            measurements.length - 1
+        );
+        filterThresholds[checkName] = measurements[cutoffIdx];
+    }
+}
+
+function facePassesFilter(checkName, measurement) {
+    if (!(checkName in filterThresholds)) return true;
+    return measurement <= filterThresholds[checkName];
+}
 
 // ── Camera animation ───────────────────────────────────────────────────────
 
@@ -163,6 +207,11 @@ export function toggleLayer(checkName, visible) {
     rebuildColors();
 }
 
+export function setSeverityFilter(ratio) {
+    severityFilter = ratio;
+    computeFilterThresholds(ratio);
+    rebuildColors();
+}
 
 // ── Public: reset camera ──────────────────────────────────────────────────
 
@@ -318,6 +367,8 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
     document.body.appendChild(tooltip);
 
     faceMap.clear();
+    severityFilter  = 1.0;
+    filterThresholds = {};
     activeLayers = new Set(['draft_angle', 'undercuts']);
 
     // Pull thresholds from live findings

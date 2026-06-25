@@ -1,5 +1,4 @@
-import { initViewer, toggleLayer, resetCamera, focusOnCheck, setIsolationMode } from '/static/viewer.js';// ── State ──────────────────────────────────────────────
-const states = {
+import { initViewer, toggleLayer, resetCamera, focusOnCheck, setIsolationMode, setSeverityFilter } from '/static/viewer.js';const states = {
     upload:  document.getElementById('state-upload'),
     loading: document.getElementById('state-loading'),
     results: document.getElementById('state-results'),
@@ -117,6 +116,9 @@ analyzeBtn.addEventListener('click', async () => {
         const isolateBtn = document.getElementById('isolate-btn');
         if (isolateBtn) isolateBtn.textContent = 'Isolate flagged';
 
+        const slider = document.getElementById('severity-slider');
+        if (slider) { slider.value = 100; document.getElementById('filter-pct').textContent = 'All'; }
+
         renderResults(data);
         showState('results');
 
@@ -155,6 +157,13 @@ document.querySelectorAll('.layer-btn').forEach(btn => {
 });
 
 document.getElementById('reset-cam').addEventListener('click', resetCamera);
+
+document.getElementById('severity-slider').addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    const pctEl = document.getElementById('filter-pct');
+    pctEl.textContent = val === 100 ? 'All' : val + '%';
+    setSeverityFilter(val / 100);
+});
 
 // ── Render helpers ─────────────────────────────────────
 const SEV_ORDER = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
