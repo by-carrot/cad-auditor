@@ -76,7 +76,7 @@ def _strip_face_indices(checks: dict) -> dict:
     return stripped
 
 
-def build_user_message(findings: dict) -> str:
+def build_user_message(findings: dict, material: str = "abs") -> str:
     """
     Serialize the findings dict into a readable message for the model.
 
@@ -232,7 +232,7 @@ def interpret_findings_staged(findings: dict, prototype_method: str, production_
     )
 
     client = anthropic.Anthropic(api_key=api_key)
-    user_message = build_user_message(findings)
+    user_message = build_user_message(findings, material)
 
     message = client.messages.create(
         model=MODEL,
