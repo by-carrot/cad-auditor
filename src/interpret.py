@@ -15,6 +15,7 @@ prompt can be iterated without touching any other module.
 
 import json
 import os
+from tabnanny import check
 import anthropic
 from dotenv import load_dotenv
 
@@ -70,6 +71,8 @@ def _strip_face_indices(checks: dict) -> dict:
     stripped = copy.deepcopy(checks)
     for check in stripped.values():
         check.pop("flagged_face_indices", None)
+        check.pop("flagged_face_angles", None)
+        check.pop("flagged_face_alignments", None)
     return stripped
 
 
@@ -109,7 +112,7 @@ def build_user_message(findings: dict) -> str:
         f"{json.dumps(checks_stripped, indent=2)}"
     )
 
-    framing += build_context(findings, findings.get("production_method", "injection_molding"))
+    framing += build_context(findings, findings.get("production_method", "injection_molding"), material)
 
     return framing
 
@@ -159,9 +162,9 @@ STAGED_SYSTEM_PROMPT = """You are a senior DFM specialist reviewing a CAD part a
 for an entrepreneur preparing to prototype and then manufacture their design.
 
 The user is prototyping via {prototype_method_label} and targeting {production_method_label} \
-for production. The findings include effective_severity fields that reflect what actually matters \
-for the chosen production method: for resin casting, draft violations are advisory and undercuts \
-are acceptable; for injection molding, all five checks apply strictly.
+for production using {material_name}. All geometry thresholds in the findings were computed \
+against {material_name} specifications: {min_wall_mm}mm minimum wall, {max_wall_mm}mm maximum \
+wall, {min_draft_degrees} degree minimum draft. The findings include effective_severity fields
 
 Each finding has stage_relevance: "prototype" or "both" means fix before prototyping; \
 "production_only" means the prototype will succeed but production will fail or cost more.
@@ -186,7 +189,7 @@ Ordered steps labeled PRE-PROTOTYPE or PRE-PRODUCTION.
 Keep under 750 words. Reference actual measurements, not generic thresholds."""
 
 
-def interpret_findings_staged(findings: dict, prototype_method: str, production_method: str = "injection_molding") -> str:
+def interpret_findings_staged(findings: dict, prototype_method: str, production_method: str = "injection_molding", material: str = "abs") -> str:
     """
     Send staged DFM findings to Claude and return a two-stage interpretation.
 
@@ -214,11 +217,18 @@ def interpret_findings_staged(findings: dict, prototype_method: str, production_
     proto_min = findings.get("prototype_wall_min_mm", 0.8)
     prod_label = findings.get("production_method_label", production_method.replace("_", " ").title())
     
+    from src.knowledge.loader import get_material_thresholds
+    mat = get_material_thresholds(material)
+
     system = STAGED_SYSTEM_PROMPT.format(
         prototype_method_label=proto_label,
         proto_min=proto_min,
         production_method_label=prod_label,
         production_method_label_upper=prod_label.upper(),
+        material_name=mat["material_name"],
+        min_wall_mm=mat["min_wall_mm"],
+        max_wall_mm=mat["max_wall_mm"],
+        min_draft_degrees=mat["min_draft_degrees"],
     )
 
     client = anthropic.Anthropic(api_key=api_key)

@@ -100,6 +100,7 @@ analyzeBtn.addEventListener('click', async () => {
     formData.append('pull_direction', document.getElementById('pull-direction').value);
     formData.append('prototype_method', document.getElementById('prototype-method').value);
     formData.append('production_method', document.getElementById('production-method').value);
+    formData.append('material', document.getElementById('material').value);
 
     try {
         const resp = await fetch('/analyze', { method: 'POST', body: formData });
@@ -260,8 +261,10 @@ function renderResults(data) {
     const protoLabels = { sls: 'SLS nylon printing', fdm: 'FDM printing', resin: 'Resin (SLA) printing' };
     const prodLabels = { injection_molding: 'Injection molding', resin_casting: 'Resin casting (urethane)' };
     const pullDir     = f.checks.draft_angle.pull_direction;
+    const matName = data.material_name || 'ABS';
     document.getElementById('mfg-context').innerHTML = `
         <p class="panel-label">Manufacturing Context</p>
+        <div class="mfg-row"><strong>Material</strong>${matName}</div>
         <div class="mfg-row"><strong>Prototype method</strong>${protoLabels[f.prototype_method] || f.prototype_method}</div>
         <div class="mfg-row"><strong>Production method</strong>${prodLabel}</div>
         <div class="mfg-row"><strong>Pull direction</strong>${pullDir} axis</div>`;

@@ -24,6 +24,7 @@ from src.load_geometry import load_stl
 from src.aggregate import run_all_checks
 from src.stage import apply_stage_labels
 from src.interpret import interpret_findings_staged
+from src.knowledge.loader import get_material_thresholds
 
 app = FastAPI(title="CAD Auditor", version="1.0.0")
 
@@ -40,6 +41,7 @@ def analyze(
     pull_direction: str = Form(default="Z"),
     prototype_method: str = Form(default="sls"),
     production_method: str = Form(default="injection_molding"),
+    material: str = Form(default="abs"),
 ):
     """
     Accept an STL file, run all five DFM checks, apply two-stage labeling,
@@ -66,6 +68,13 @@ def analyze(
             status_code=422,
         )
 
+    VALID_MATERIALS = {"abs", "polypropylene", "polycarbonate", "nylon_pa6", "tpe"}
+    if material.lower() not in VALID_MATERIALS:
+        return JSONResponse(
+            {"success": False, "error": f"material must be one of: {', '.join(sorted(VALID_MATERIALS))}"},
+            status_code=422,
+        )
+
     suffix = Path(file.filename).suffix.lower() if file.filename else ".stl"
     tmp_path = None
 
@@ -75,15 +84,37 @@ def analyze(
             tmp_path = tmp.name
 
         mesh = load_stl(tmp_path, verbose=False)
-        findings = run_all_checks(mesh, pull_direction=pull_direction.upper())
-        staged = apply_stage_labels(findings, prototype_method.lower(), production_method.lower())
-        interpretation = interpret_findings_staged(staged, prototype_method.lower(), production_method.lower())
+        
+        mat_thresholds = get_material_thresholds(material.lower())
+
+        findings = run_all_checks(
+            mesh,
+            pull_direction=pull_direction.upper(),
+            min_draft_degrees=mat_thresholds["min_draft_degrees"],
+            min_thickness_mm=mat_thresholds["min_wall_mm"],
+            max_thickness_mm=mat_thresholds["max_wall_mm"],
+            nominal_wall_mm=mat_thresholds["nominal_wall_mm"],
+        )
+        staged = apply_stage_labels(
+            findings,
+            prototype_method.lower(),
+            production_method.lower(),
+            material_min_wall_mm=mat_thresholds["min_wall_mm"],
+        )
+        interpretation = interpret_findings_staged(
+            staged,
+            prototype_method.lower(),
+            production_method.lower(),
+            material=material.lower(),
+        )
 
         return JSONResponse({
             "success": True,
             "file_name": file.filename,
             "findings": staged,
             "interpretation": interpretation,
+            "material": material.lower(),
+            "material_name": mat_thresholds["material_name"],
         })
 
     except Exception as exc:

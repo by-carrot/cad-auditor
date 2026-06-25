@@ -71,6 +71,17 @@
                     </select>
                     <p class="form-hint">Your target manufacturing method for production units.</p>
                 </div>
+                <div class="form-group">
+                    <label class="form-label" for="material">Target material</label>
+                    <select id="material" class="form-select">
+                        <option value="abs">ABS — general purpose (default)</option>
+                        <option value="polypropylene">Polypropylene (PP)</option>
+                        <option value="polycarbonate">Polycarbonate (PC)</option>
+                        <option value="nylon_pa6">Nylon PA6</option>
+                        <option value="tpe">TPE / Elastomer</option>
+                    </select>
+                    <p class="form-hint">Sets wall thickness and draft angle thresholds for your resin.</p>
+                </div>
             </div>
             <button id="analyze-btn" class="analyze-btn" disabled>Analyze for DFM issues</button>
         </div>

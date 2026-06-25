@@ -271,26 +271,46 @@ def _build_im_context(findings: dict) -> str:
         + "\n\n".join(sections)
     )
 
-
-def build_context(findings: dict, production_method: str = "injection_molding") -> str:
+def get_material_thresholds(material: str) -> dict:
     """
-    Build a knowledge context string based on production method.
+    Return geometry thresholds for the selected material.
+    Falls back to ABS if the material key is not found.
 
-    Parameters
-    ----------
-    findings : dict
-        Staged findings from stage.apply_stage_labels().
-    production_method : str
-        One of "injection_molding" or "resin_casting".
-
-    Returns
-    -------
-    str
-        Formatted knowledge context string with collectibles context appended.
+    Returns keys: min_wall_mm, max_wall_mm, nominal_wall_mm,
+    min_draft_degrees, material_name.
     """
+    _load()
+    profile = _materials.get(material.lower(), _materials.get("abs", {}))
+    return {
+        "min_wall_mm":       profile.get("min_wall_mm",    1.5),
+        "max_wall_mm":       profile.get("max_wall_mm",    4.0),
+        "nominal_wall_mm":   profile.get("optimal_wall_mm", 2.5),
+        "min_draft_degrees": profile.get("min_draft_degrees", 1.0),
+        "material_name":     profile.get("name", "ABS"),
+        "shrinkage":         profile.get("shrinkage_pct_range", "0.4 to 0.8"),
+        "notes":             profile.get("notes", ""),
+    }
+
+def build_context(
+    findings: dict,
+    production_method: str = "injection_molding",
+    material: str = "abs",
+) -> str:
     _load()
 
     prod = production_method.lower()
+
+    thresholds = get_material_thresholds(material)
+    mat_block = (
+        f"--- SELECTED MATERIAL: {thresholds['material_name'].upper()} ---\n"
+        f"Wall thickness range: {thresholds['min_wall_mm']}mm minimum, "
+        f"{thresholds['max_wall_mm']}mm maximum, "
+        f"{thresholds['nominal_wall_mm']}mm optimal nominal.\n"
+        f"Minimum draft angle: {thresholds['min_draft_degrees']} degrees.\n"
+        f"Shrinkage: {thresholds['shrinkage']}%.\n"
+        f"Notes: {thresholds['notes']}"
+    )
+
     context = (
         _format_resin_casting_context(findings)
         if prod == "resin_casting"
@@ -312,4 +332,4 @@ def build_context(findings: dict, production_method: str = "injection_molding") 
     for rule in c["surface_finish_and_texture"]["rules"]:
         coll_lines.append(f"  - {rule}")
 
-    return context + "\n\n" + "\n".join(coll_lines)
+    return "\n\n" + mat_block + "\n\n" + context + "\n\n" + "\n".join(coll_lines)

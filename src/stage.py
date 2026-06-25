@@ -162,6 +162,7 @@ def apply_stage_labels(
     findings: dict,
     prototype_method: str,
     production_method: str = "injection_molding",
+    material_min_wall_mm: float = 1.5,
 ) -> dict:
     """
     Return a deep copy of findings with stage_relevance, effective_severity,
@@ -185,7 +186,11 @@ def apply_stage_labels(
     method = prototype_method.lower()
     prod = production_method.lower()
     proto_min = PROTOTYPE_WALL_MIN_MM.get(method, 0.8)
-    prod_wall_min = PRODUCTION_WALL_MIN_MM.get(prod, 1.5)
+    prod_wall_min = (
+        material_min_wall_mm
+        if prod == "injection_molding"
+        else PRODUCTION_WALL_MIN_MM.get(prod, 0.5)
+    )
 
     staged = copy.deepcopy(findings)
     checks = staged["checks"]
