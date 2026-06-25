@@ -38,9 +38,11 @@ let activeLayers = new Set(['draft_angle', 'undercuts']);
 let severityFilter  = 1.0;   // 1.0 = show all, 0.05 = worst 5% only
 let filterThresholds = {};   // {checkName: cutoff_measurement}
 let thresholds = { draft_angle: 1.0, undercuts: -0.259 };
-
+let isolationMode = false;
+const ISOLATION_HIDE = new THREE.Color(0x1e293b); // matches scene background
 let tooltip = null;
 let animFrameId = null;
+let edgeLines = null;
 
 
 // ── Color computation ──────────────────────────────────────────────────────
@@ -204,7 +206,14 @@ export function focusOnCheck(checkName) {
 
 export function toggleLayer(checkName, visible) {
     visible ? activeLayers.add(checkName) : activeLayers.delete(checkName);
-    rebuildColors();
+
+    if (checkName === 'sharp_corners') {
+        if (edgeLines) edgeLines.visible = visible;
+    } else {
+        rebuildColors();
+    }
+
+    updateLegendVisibility();
 }
 
 export function setSeverityFilter(ratio) {
@@ -234,6 +243,10 @@ export function getFaceCounts() {
     return counts;
 }
 
+export function setIsolationMode(active) {
+    isolationMode = active;
+    rebuildColors();
+}
 
 // ── Tooltip helpers ────────────────────────────────────────────────────────
 
@@ -281,14 +294,14 @@ function buildLegend(canvas) {
                 <span>${thresholds.draft_angle.toFixed(1)}°</span>
             </div>
         </div>
-        <div class="legend-row" id="legend-undercuts">
-            <div class="legend-grad" style="background: linear-gradient(to bottom,
-                #c2410c, #f97316, #fed7aa)"></div>
+        <div class="legend-row" id="legend-sharp">
+            <div class="legend-grad" style="background:#fbbf24; min-height:12px; border-radius:3px;"></div>
             <div class="legend-labels">
-                <span>Opposing</span>
-                <span class="legend-title">Undercuts</span>
-                <span>Threshold</span>
+                <span style="font-size:10px; color:#94a3b8; font-family:var(--font-mono, monospace);">Lines</span>
+                <span class="legend-title">Sharp corners</span>
+                <span></span>
             </div>
+        </div>
         </div>
         <div class="legend-neutral">
             <div class="legend-swatch" style="background:#cbd5e1"></div>
@@ -299,55 +312,13 @@ function buildLegend(canvas) {
 
 function updateLegendVisibility() {
     if (!legend) return;
-    const draftRow    = legend.querySelector('.legend-row:first-child');
+    const draftRow  = legend.querySelector('.legend-row:first-child');
     const undercutRow = document.getElementById('legend-undercuts');
-    if (draftRow)    draftRow.style.display    = activeLayers.has('draft_angle') ? 'flex' : 'none';
-    if (undercutRow) undercutRow.style.display = activeLayers.has('undercuts')   ? 'flex' : 'none';
+    const sharpRow    = document.getElementById('legend-sharp');
+    if (draftRow)    draftRow.style.display    = activeLayers.has('draft_angle')   ? 'flex' : 'none';
+    if (undercutRow) undercutRow.style.display = activeLayers.has('undercuts')     ? 'flex' : 'none';
+    if (sharpRow)    sharpRow.style.display    = activeLayers.has('sharp_corners') ? 'flex' : 'none';
 }
-
-// ── Legend overlay ─────────────────────────────────────────────
-let legend = null;
-
-function buildLegend(canvas) {
-    if (legend && legend.parentNode) legend.parentNode.removeChild(legend);
-
-    const rect = canvas.getBoundingClientRect();
-    legend = document.createElement('div');
-    legend.className = 'viewport-legend';
-    legend.innerHTML = `
-        <div class="legend-row">
-            <div class="legend-grad" style="background: linear-gradient(to bottom,
-                #b91c1c, #ef4444, #fca5a5)"></div>
-            <div class="legend-labels">
-                <span>0°</span>
-                <span class="legend-title">Draft</span>
-                <span>${thresholds.draft_angle.toFixed(1)}°</span>
-            </div>
-        </div>
-        <div class="legend-row" id="legend-undercuts">
-            <div class="legend-grad" style="background: linear-gradient(to bottom,
-                #c2410c, #f97316, #fed7aa)"></div>
-            <div class="legend-labels">
-                <span>Opposing</span>
-                <span class="legend-title">Undercuts</span>
-                <span>Threshold</span>
-            </div>
-        </div>
-        <div class="legend-neutral">
-            <div class="legend-swatch" style="background:#cbd5e1"></div>
-            <span>No issue</span>
-        </div>`;
-    document.querySelector('.viewport-section').appendChild(legend);
-}
-
-function updateLegendVisibility() {
-    if (!legend) return;
-    const draftRow    = legend.querySelector('.legend-row:first-child');
-    const undercutRow = document.getElementById('legend-undercuts');
-    if (draftRow)    draftRow.style.display    = activeLayers.has('draft_angle') ? 'flex' : 'none';
-    if (undercutRow) undercutRow.style.display = activeLayers.has('undercuts')   ? 'flex' : 'none';
-}
-
 
 // ── Main init ──────────────────────────────────────────────────────────────
 
@@ -367,9 +338,10 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
     document.body.appendChild(tooltip);
 
     faceMap.clear();
+    edgeLines = null;
     severityFilter  = 1.0;
     filterThresholds = {};
-    activeLayers = new Set(['draft_angle', 'undercuts']);
+    activeLayers = new Set(['draft_angle', 'undercuts', 'sharp_corners']);
 
     // Pull thresholds from live findings
     const draftCheck    = findings.checks.draft_angle;
@@ -450,6 +422,32 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
     meshObj.scale.setScalar(scale);
     scene.add(meshObj);
 
+    // ── Sharp corner edges ────────────────────────────────────
+    if (edgeLines) { scene.remove(edgeLines); edgeLines = null; }
+    const edgeData = findings.checks.sharp_corners?.flagged_edge_vertices;
+    if (edgeData && edgeData.length > 0) {
+        const positions = [];
+        for (const [v1, v2] of edgeData) {
+            positions.push(
+                (v1[0] - center.x) * scale,
+                (v1[1] - center.y) * scale,
+                (v1[2] - center.z) * scale,
+                (v2[0] - center.x) * scale,
+                (v2[1] - center.y) * scale,
+                (v2[2] - center.z) * scale,
+            );
+        }
+        const edgeGeo = new THREE.BufferGeometry();
+        edgeGeo.setAttribute('position',
+            new THREE.Float32BufferAttribute(positions, 3));
+        edgeLines = new THREE.LineSegments(
+            edgeGeo,
+            new THREE.LineBasicMaterial({ color: 0xfbbf24 })
+        );
+        edgeLines.visible = activeLayers.has('sharp_corners');
+        scene.add(edgeLines);
+    }
+
     // ── Camera & controls ──
     camera.position.set(0, 60, 200);
     camera.lookAt(0, 0, 0);
@@ -523,13 +521,6 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
         renderer.render(scene, camera);
     })();
 
-    let isolationMode = false;
-    const ISOLATION_HIDE = new THREE.Color(0x1e293b); // matches scene background
-
-    export function setIsolationMode(active) {
-        isolationMode = active;
-        rebuildColors();
-}
     // ── Resize ──
     new ResizeObserver(() => {
         const w = canvas.clientWidth;
@@ -538,4 +529,40 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
         camera.updateProjectionMatrix();
         renderer.setSize(w, h, false);
     }).observe(canvas);
+}
+
+export function computePullSuggestion(stlArrayBuffer) {
+    const geo    = new STLLoader().parse(stlArrayBuffer);
+    const pos    = geo.attributes.position;
+    const count  = pos.count;
+    const scores = { X: 0, Y: 0, Z: 0 };
+
+    for (let i = 0; i < count; i += 3) {
+        const ax = pos.getX(i),   ay = pos.getY(i),   az = pos.getZ(i);
+        const bx = pos.getX(i+1), by = pos.getY(i+1), bz = pos.getZ(i+1);
+        const cx = pos.getX(i+2), cy = pos.getY(i+2), cz = pos.getZ(i+2);
+
+        const abx = bx-ax, aby = by-ay, abz = bz-az;
+        const acx = cx-ax, acy = cy-ay, acz = cz-az;
+        const nx = aby*acz - abz*acy;
+        const ny = abz*acx - abx*acz;
+        const nz = abx*acy - aby*acx;
+
+        const area = Math.sqrt(nx*nx + ny*ny + nz*nz) / 2;
+        const absX = Math.abs(nx), absY = Math.abs(ny), absZ = Math.abs(nz);
+        const max  = Math.max(absX, absY, absZ);
+        if (max === absX) scores.X += area;
+        else if (max === absY) scores.Y += area;
+        else scores.Z += area;
+    }
+
+    geo.dispose();
+
+    let best = 'Z', bestScore = 0;
+    for (const [axis, score] of Object.entries(scores)) {
+        if (score > bestScore) { bestScore = score; best = axis; }
+    }
+    const total      = scores.X + scores.Y + scores.Z;
+    const confidence = total > 0 ? Math.round(bestScore / total * 100) : 0;
+    return { suggested: best, confidence };
 }

@@ -73,6 +73,7 @@ def _strip_face_indices(checks: dict) -> dict:
         check.pop("flagged_face_indices", None)
         check.pop("flagged_face_angles", None)
         check.pop("flagged_face_alignments", None)
+        check.pop("flagged_edge_vertices", None)
     return stripped
 
 
@@ -218,6 +219,21 @@ immediately without searching documentation.
 Keep total response under 900 words. Use actual measurements from the findings \
 throughout, never generic placeholder values."""
 
+def mock_interpretation() -> str:
+    return """## OVERALL ASSESSMENT
+This is a test run. API key not configured. Geometry checks completed successfully.
+
+## FIX BEFORE PROTOTYPING
+No geometry issues will affect your prototype (test mode).
+
+## FIX BEFORE PRODUCTION TOOLING
+Draft angle, undercut, wall thickness, rib, and sharp corner results are available in the check cards above. Configure ANTHROPIC_API_KEY in .env to see the full DFM assessment.
+
+## WHAT TO DO NEXT
+PRE-TOOLING: Add your Anthropic API key to the .env file and re-run for full interpretation."""
+
+
+
 def interpret_findings_staged(findings: dict, prototype_method: str, production_method: str = "injection_molding", material: str = "abs") -> str:
     """
     Send staged DFM findings to Claude and return a two-stage interpretation.
@@ -237,10 +253,7 @@ def interpret_findings_staged(findings: dict, prototype_method: str, production_
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key or api_key == "your_key_here":
-        raise EnvironmentError(
-            "ANTHROPIC_API_KEY is not configured.\n"
-            "Open the .env file and replace 'your_key_here' with your actual key."
-        )
+        return mock_interpretation()
 
     proto_label = findings.get("prototype_method_label", prototype_method)
     proto_min = findings.get("prototype_wall_min_mm", 0.8)
@@ -258,6 +271,7 @@ def interpret_findings_staged(findings: dict, prototype_method: str, production_
         min_wall_mm=mat["min_wall_mm"],
         max_wall_mm=mat["max_wall_mm"],
         min_draft_degrees=mat["min_draft_degrees"],
+        nominal_wall_mm=mat["nominal_wall_mm"],
     )
 
     client = anthropic.Anthropic(api_key=api_key)

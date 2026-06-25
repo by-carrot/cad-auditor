@@ -224,6 +224,7 @@ def check_sharp_corners(
             "severity": "inconclusive",
             "n_edges_analyzed": 0,
             "n_edges_flagged": 0,
+            "flagged_edge_vertices": [],
             "min_measured_angle_deg": None,
             "threshold_deg": min_corner_angle_deg,
             "description": (
@@ -235,6 +236,14 @@ def check_sharp_corners(
     sharp_mask = dihedral_angles < min_corner_angle_deg
     n_flagged = int(sharp_mask.sum())
     flagged_angles = dihedral_angles[sharp_mask]
+
+    flagged_edge_vertices = []
+    if n_flagged > 0:
+        edge_pairs = mesh.face_adjacency_edges[sharp_mask]
+        verts = mesh.vertices[edge_pairs]
+        flagged_edge_vertices = [
+            [v[0].tolist(), v[1].tolist()] for v in verts
+        ]
 
     if n_flagged == 0:
         severity = "pass"
@@ -264,6 +273,7 @@ def check_sharp_corners(
         "severity": severity,
         "n_edges_analyzed": n_edges,
         "n_edges_flagged": n_flagged,
+        "flagged_edge_vertices": flagged_edge_vertices,
         "min_measured_angle_deg": (
             round(float(flagged_angles.min()), 2) if n_flagged > 0 else None
         ),

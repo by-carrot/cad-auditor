@@ -1,8 +1,30 @@
-import { initViewer, toggleLayer, resetCamera, focusOnCheck, setIsolationMode, setSeverityFilter } from '/static/viewer.js';const states = {
+import { initViewer, toggleLayer, resetCamera, focusOnCheck, setIsolationMode, setSeverityFilter, computePullSuggestion } from '/static/viewer.js';const states = {
     upload:  document.getElementById('state-upload'),
     loading: document.getElementById('state-loading'),
     results: document.getElementById('state-results'),
 };
+
+const MATERIAL_THRESHOLDS = {
+    abs:           { min_wall: 1.5, max_wall: 4.0, min_draft: 1.0 },
+    polypropylene: { min_wall: 0.8, max_wall: 3.5, min_draft: 1.0 },
+    polycarbonate: { min_wall: 1.0, max_wall: 3.5, min_draft: 1.5 },
+    nylon_pa6:     { min_wall: 0.8, max_wall: 3.0, min_draft: 0.5 },
+    tpe:           { min_wall: 1.5, max_wall: 5.0, min_draft: 3.0 },
+};
+
+function updateThresholdPlaceholders() {
+    const mat = document.getElementById('material')?.value || 'abs';
+    const t   = MATERIAL_THRESHOLDS[mat] || MATERIAL_THRESHOLDS.abs;
+    const minWall  = document.getElementById('custom-min-wall');
+    const maxWall  = document.getElementById('custom-max-wall');
+    const minDraft = document.getElementById('custom-min-draft');
+    if (minWall)  minWall.placeholder  = `${t.min_wall} (${mat} default)`;
+    if (maxWall)  maxWall.placeholder  = `${t.max_wall} (${mat} default)`;
+    if (minDraft) minDraft.placeholder = `${t.min_draft}° (${mat} default)`;
+}
+
+document.getElementById('material')?.addEventListener('change', updateThresholdPlaceholders);
+updateThresholdPlaceholders();
 
 function showState(name) {
     Object.values(states).forEach(el => el.classList.remove('active'));
@@ -18,6 +40,7 @@ const analyzeBtn  = document.getElementById('analyze-btn');
 
 let selectedFile = null;
 let stlBuffer    = null;
+let isolated     = false;
 
 function handleFile(file) {
     if (!file || !file.name.toLowerCase().endsWith('.stl')) {
@@ -37,7 +60,24 @@ function handleFile(file) {
     // Read the buffer now so the 3D viewer has it after analysis completes.
     // The server deletes the file; the browser holds this copy for rendering only.
     const reader = new FileReader();
-    reader.onload = (e) => { stlBuffer = e.target.result; };
+    reader.onload = (e) => {
+        stlBuffer = e.target.result;
+
+        // Suggest pull direction from geometry
+        try {
+            const suggestion = computePullSuggestion(stlBuffer);
+            const select     = document.getElementById('pull-direction');
+            const hint       = document.getElementById('pull-hint');
+            if (select && hint) {
+                select.value    = suggestion.suggested;
+                hint.textContent = `Geometry suggests ${suggestion.suggested} axis `
+                    + `(${suggestion.confidence}% of surface area). Override if your part differs.`;
+                hint.hidden = false;
+            }
+        } catch (_) {
+            // Suggestion is best-effort; silent fail is acceptable
+        }
+    };
     reader.readAsArrayBuffer(file);
 }
 
@@ -100,6 +140,13 @@ analyzeBtn.addEventListener('click', async () => {
     formData.append('prototype_method', document.getElementById('prototype-method').value);
     formData.append('production_method', document.getElementById('production-method').value);
     formData.append('material', document.getElementById('material').value);
+    
+    const minWallVal  = document.getElementById('custom-min-wall')?.value;
+    const maxWallVal  = document.getElementById('custom-max-wall')?.value;
+    const minDraftVal = document.getElementById('custom-min-draft')?.value;
+    if (minWallVal)  formData.append('custom_min_wall',  minWallVal);
+    if (maxWallVal)  formData.append('custom_max_wall',  maxWallVal);
+    if (minDraftVal) formData.append('custom_min_draft', minDraftVal);
 
     try {
         const resp = await fetch('/analyze', { method: 'POST', body: formData });
@@ -134,7 +181,8 @@ analyzeBtn.addEventListener('click', async () => {
     } catch (err) {
         stopProgress();
         showState('upload');
-        alert('Could not reach the server. Make sure uvicorn is running.');
+        console.error('Caught error:', err);
+        alert('Error: ' + err.message);
     }
 });
 
@@ -146,6 +194,12 @@ document.getElementById('analyze-another').addEventListener('click', () => {
     dropZone.classList.remove('has-file');
     analyzeBtn.disabled = true;
     showState('upload');
+
+    document.getElementById('pull-hint').hidden = true;
+    document.getElementById('custom-min-wall').value  = '';
+    document.getElementById('custom-max-wall').value  = '';
+    document.getElementById('custom-min-draft').value = '';
+    updateThresholdPlaceholders();
 });
 
 // ── Layer toggles ──────────────────────────────────────
@@ -270,14 +324,15 @@ function renderResults(data) {
     const protoLabels = { sls: 'SLS nylon printing', fdm: 'FDM printing', resin: 'Resin (SLA) printing' };
     const prodLabels = { injection_molding: 'Injection molding', resin_casting: 'Resin casting (urethane)' };
     const pullDir     = f.checks.draft_angle.pull_direction;
-    const matName = data.material_name || 'ABS';
+    const matName  = data.material_name || 'ABS';
+    const prodLabel = f.production_method_label || 'Injection molding';
     document.getElementById('mfg-context').innerHTML = `
         <p class="panel-label">Manufacturing Context</p>
         <div class="mfg-row"><strong>Material</strong>${matName}</div>
         <div class="mfg-row"><strong>Prototype method</strong>${protoLabels[f.prototype_method] || f.prototype_method}</div>
         <div class="mfg-row"><strong>Production method</strong>${prodLabel}</div>
         <div class="mfg-row"><strong>Pull direction</strong>${pullDir} axis</div>`;
-
+        
     const checks = Object.values(f.checks);
     checks.sort((a, b) => (SEV_ORDER[a.severity.toLowerCase()] ?? 9) - (SEV_ORDER[b.severity.toLowerCase()] ?? 9));
 
@@ -316,6 +371,10 @@ function renderResults(data) {
     const cUnder        = document.getElementById('count-undercuts');
     if (cDraft)  cDraft.textContent  = draftCount    > 0 ? draftCount.toLocaleString()    : '';
     if (cUnder)  cUnder.textContent  = undercutCount > 0 ? undercutCount.toLocaleString() : '';
+
+    const sharpCount = f.checks.sharp_corners?.n_edges_flagged ?? 0;
+    const cSharp = document.getElementById('count-sharp_corners');
+    if (cSharp) cSharp.textContent = sharpCount > 0 ? sharpCount.toLocaleString() : '';
 
     const sections = parseAssessment(data.interpretation);
     document.getElementById('assessment-body').innerHTML = sections.length

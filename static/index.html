@@ -62,6 +62,7 @@
                         <option value="Y">Y axis — horizontal</option>
                     </select>
                     <p class="form-hint">The axis your mold opens along. Z works for most flat-base objects.</p>
+                    <p id="pull-hint" class="form-hint pull-suggestion" hidden></p>
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="production-method">Production method</label>
@@ -83,6 +84,33 @@
                     <p class="form-hint">Sets wall thickness and draft angle thresholds for your resin.</p>
                 </div>
             </div>
+
+            <details class="advanced-section">
+                <summary class="advanced-toggle">
+                    <span>Advanced — override thresholds</span>
+                </summary>
+                <div class="advanced-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="custom-min-wall">Min wall (mm)</label>
+                        <input type="number" id="custom-min-wall" class="form-input"
+                               min="0.1" max="10" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="custom-max-wall">Max wall (mm)</label>
+                        <input type="number" id="custom-max-wall" class="form-input"
+                               min="1" max="20" step="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="custom-min-draft">Min draft (°)</label>
+                        <input type="number" id="custom-min-draft" class="form-input"
+                               min="0" max="10" step="0.5">
+                    </div>
+                </div>
+                <p class="form-hint" style="margin-top:8px">
+                    Leave blank to use material defaults. Fill in only what you want to override.
+                </p>
+            </details>
+
             <button id="analyze-btn" class="analyze-btn" disabled>Analyze for DFM issues</button>
         </div>
         <p class="size-note">Accepts STL files up to 50 MB. Dense meshes take 15–30 seconds.</p>
@@ -152,6 +180,11 @@
                         Undercuts
                         <span class="layer-count" id="count-undercuts"></span>
                     </button>
+                    <button class="layer-btn active" data-check="sharp_corners">
+                        <span class="layer-dot" style="background:#fbbf24"></span>
+                        Sharp corners
+                        <span class="layer-count" id="count-sharp_corners"></span>
+                    </button>
                 </div>
                 <button class="btn-reset-cam" id="reset-cam">Reset view</button>
                 <button class="btn-reset-cam" id="isolate-btn">Isolate flagged</button>
@@ -162,8 +195,7 @@
                 </div>
             </div>
             <canvas id="dfm-canvas" class="dfm-canvas"></canvas>
-            <p class="viewport-hint">Drag to rotate · Scroll to zoom · Click a highlighted face to jump to its finding</p>
-        </section>
+            <p class="viewport-hint">Drag to rotate · Scroll to zoom · Click a highlighted face to jump to its finding · Yellow lines = sharp corners</p>
 
         <section class="checks-section">
             <div id="prototype-findings" class="stage-block" hidden>
