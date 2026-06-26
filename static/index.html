@@ -149,6 +149,9 @@
             <div id="results-meta" class="results-meta"></div>
             <button id="analyze-another" class="btn-ghost">Analyze another file</button>
             <button id="download-report" class="btn-ghost" hidden>&#8615; Report</button>
+            <button id="add-to-assembly" class="btn-ghost" hidden>
+                <i class="ti ti-layout-grid" aria-hidden="true"></i> Assembly
+            </button>
         </div>
     </header>
 
@@ -249,6 +252,37 @@
                 </div>
 
                 <div id="compare-results" hidden></div>
+            </div>
+        </section>
+
+        <!-- ASSEMBLY ANALYSIS -->
+        <section class="assembly-section" id="assembly-section" hidden>
+            <div class="assembly-header">
+                <p class="panel-label" style="margin:0">Assembly Analysis</p>
+                <span class="assembly-count" id="assembly-count">1 part</span>
+            </div>
+
+            <div id="assembly-critical" class="assembly-critical"></div>
+            <div id="assembly-pull" class="assembly-pull"></div>
+            <div id="assembly-parts" class="assembly-parts"></div>
+
+            <div class="assembly-add-section">
+                <p class="assembly-add-label">Add another part</p>
+                <div class="compare-settings" id="assembly-settings"></div>
+                <div class="compare-drop" id="assembly-drop-zone">
+                    <p class="compare-drop-text">Drop next part STL here or</p>
+                    <label class="file-btn" for="assembly-file-input" style="font-size:12px; padding:5px 12px">Choose file</label>
+                    <input type="file" id="assembly-file-input" accept=".stl" hidden>
+                    <p id="assembly-file-name" class="file-selected" hidden></p>
+                </div>
+                <button class="analyze-btn" id="assembly-analyze-btn" disabled
+                    style="margin-top:12px; font-size:13px; padding:10px">
+                    Analyze part
+                </button>
+                <div id="assembly-loading" hidden style="text-align:center; padding:16px">
+                    <div class="spinner" style="margin:0 auto 8px"></div>
+                    <p style="font-size:13px; color:var(--text-2)">Analyzing part…</p>
+                </div>
             </div>
         </section>
     </main>
