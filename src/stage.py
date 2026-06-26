@@ -28,15 +28,17 @@ Sources for resin casting thresholds:
 import copy
 
 PROTOTYPE_WALL_MIN_MM = {
-    "sls": 0.8,
-    "fdm": 1.0,
-    "resin": 0.5,
+    "sls":           0.8,
+    "fdm":           1.0,
+    "resin":         0.5,
+    "resin_casting": 0.5,
 }
 
 PROTOTYPE_LABELS = {
-    "sls": "SLS nylon printing",
-    "fdm": "FDM printing",
-    "resin": "resin (SLA) printing",
+    "sls":           "SLS nylon printing",
+    "fdm":           "FDM printing",
+    "resin":         "resin (SLA) printing",
+    "resin_casting": "resin casting (urethane)",
 }
 
 PRODUCTION_LABELS = {

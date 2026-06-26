@@ -45,6 +45,62 @@ let firstAnalysisData     = null;
 let compareFile           = null;
 let compareFileBuffer     = null;
 
+const HISTORY_KEY = 'cad_auditor_history';
+const MAX_HISTORY = 3;
+
+function stripFindingsForHistory(findings) {
+    const stripped = {
+        overall_severity:           findings.overall_severity,
+        overall_effective_severity: findings.overall_effective_severity,
+        prototype_method:           findings.prototype_method,
+        prototype_method_label:     findings.prototype_method_label,
+        production_method:          findings.production_method,
+        production_method_label:    findings.production_method_label,
+        mesh_summary:               findings.mesh_summary,
+        checks: {},
+    };
+    for (const [name, check] of Object.entries(findings.checks)) {
+        stripped.checks[name] = {
+            category:           check.category,
+            severity:           check.severity,
+            effective_severity: check.effective_severity,
+            stage_relevance:    check.stage_relevance,
+            description:        check.description,
+            pull_direction:     check.pull_direction,
+            face_count_flagged: check.face_count_flagged,
+            face_count_total:   check.face_count_total,
+            n_edges_flagged:    check.n_edges_flagged,
+            n_edges_analyzed:   check.n_edges_analyzed,
+            pct_too_thin:       check.pct_too_thin,
+            pct_too_thick:      check.pct_too_thick,
+            pct_exceeding_ratio: check.pct_exceeding_ratio,
+            threshold_min_mm:   check.threshold_min_mm,
+            threshold_max_mm:   check.threshold_max_mm,
+            thin_face_count:    check.thin_face_indices?.length ?? 0,
+            thick_face_count:   check.thick_face_indices?.length ?? 0,
+            rib_flagged_count:  check.rib_flagged_face_indices?.length ?? 0,
+        };
+    }
+    return stripped;
+}
+
+function saveToHistory(data) {
+    let history = getHistory();
+    history.unshift({
+        file_name:     data.file_name,
+        material_name: data.material_name,
+        material:      data.material,
+        timestamp:     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        findings:      stripFindingsForHistory(data.findings),
+    });
+    history = history.slice(0, MAX_HISTORY);
+    try { sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (_) {}
+}
+
+function getHistory() {
+    try { return JSON.parse(sessionStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+}
+
 function handleFile(file) {
     if (!file || !file.name.toLowerCase().endsWith('.stl')) {
         alert('Please select a .stl file.');
@@ -170,6 +226,7 @@ analyzeBtn.addEventListener('click', async () => {
         if (slider) { slider.value = 100; document.getElementById('filter-pct').textContent = 'All'; }
 
         firstAnalysisData = data;
+        saveToHistory(data);
         renderResults(data);
         showState('results');
 
@@ -202,6 +259,7 @@ document.getElementById('analyze-another').addEventListener('click', () => {
     firstAnalysisData  = null;
     compareFile        = null;
     compareFileBuffer  = null;
+    document.getElementById('download-report').hidden = true;
     document.getElementById('compare-body').hidden   = true;
     document.getElementById('compare-toggle').textContent = 'Upload revised STL';
     document.getElementById('compare-file-name').hidden   = true;
@@ -301,6 +359,11 @@ function extractMeasurement(check) {
     }
     if (c === 'sharp_corners') {
         return `${(check.n_edges_flagged || 0).toLocaleString()} edges flagged`;
+    }
+    if (c === 'boss_detection') {
+        return check.n_bosses_detected > 0
+            ? `${check.n_bosses_detected} boss candidate${check.n_bosses_detected > 1 ? 's' : ''} · worst ratio ${check.worst_wall_ratio ? Math.round(check.worst_wall_ratio * 100) + '%' : 'N/A'} of nominal`
+            : '';
     }
     return '';
 }
@@ -424,6 +487,7 @@ function renderResults(data) {
         : `<div class="assessment-text">${data.interpretation}</div>`;
 
     document.getElementById('preview-wrap').hidden = false;
+    document.getElementById('download-report').hidden = false;
     previewActive = false;
     const previewBtn = document.getElementById('preview-toggle');
     if (previewBtn) {
@@ -438,6 +502,185 @@ function renderResults(data) {
     if (vpHint) vpHint.hidden = false;
 }
 
+// ── PDF / HTML report download ─────────────────────────────────
+
+document.getElementById('download-report').addEventListener('click', () => {
+    if (!firstAnalysisData) return;
+    const html = buildReportHTML(firstAnalysisData);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `cad-auditor-${(firstAnalysisData.file_name || 'report').replace('.stl', '')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+function buildReportHTML(data) {
+    const f       = data.findings;
+    const overall = (f.overall_effective_severity || f.overall_severity || 'pass').toLowerCase();
+    const date    = new Date().toLocaleDateString();
+    const m       = f.mesh_summary;
+    const bb      = m.bounding_box_mm;
+
+    const sevColor = {
+        high: '#dc2626', medium: '#d97706', low: '#ca8a04',
+        pass: '#16a34a', inconclusive: '#64748b',
+    }[overall] || '#64748b';
+
+    const sevBg = {
+        high: '#fef2f2', medium: '#fffbeb', low: '#fefce8',
+        pass: '#f0fdf4', inconclusive: '#f8fafc',
+    }[overall] || '#f8fafc';
+
+    const checkNames = {
+        draft_angle:         'Draft Angles',
+        wall_thickness:      'Wall Thickness',
+        undercuts:           'Undercuts',
+        rib_thickness_proxy: 'Rib Thickness',
+        sharp_corners:       'Sharp Corners',
+        boss_detection:      'Boss Detection',
+    };
+
+    const SEV_ORDER_RPT = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
+
+    const checks = Object.values(f.checks).sort((a, b) => {
+        const as = (a.effective_severity || a.severity || 'pass').toLowerCase();
+        const bs = (b.effective_severity || b.severity || 'pass').toLowerCase();
+        return (SEV_ORDER_RPT[as] ?? 4) - (SEV_ORDER_RPT[bs] ?? 4);
+    });
+
+    function sevStyle(s) {
+        const c = {
+            high: '#dc2626', medium: '#d97706', low: '#ca8a04',
+            pass: '#16a34a', inconclusive: '#64748b',
+        }[s] || '#64748b';
+        const bg = {
+            high: '#fef2f2', medium: '#fffbeb', low: '#fefce8',
+            pass: '#f0fdf4', inconclusive: '#f8fafc',
+        }[s] || '#f8fafc';
+        return `background:${bg}; color:${c}; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;`;
+    }
+
+    function checkRows() {
+        return checks.map(c => {
+            const sev = (c.effective_severity || c.severity || 'pass').toLowerCase();
+            return `
+            <tr>
+                <td style="padding:10px 12px; font-weight:600; font-size:13px; color:#0f172a">${checkNames[c.category] || c.category}</td>
+                <td style="padding:10px 12px"><span style="${sevStyle(sev)}">${sev}</span></td>
+                <td style="padding:10px 12px; font-size:13px; color:#64748b; line-height:1.5">${c.description || ''}</td>
+                <td style="padding:10px 12px; font-size:11px; font-family:monospace; color:#64748b">${c.stage_relevance === 'production_only' ? 'Pre-tooling' : 'Pre-prototype'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function formatAssessment(text) {
+        if (!text) return '<p style="color:#64748b">No interpretation available.</p>';
+        return text
+            .split('\n')
+            .map(line => {
+                if (line.startsWith('## '))
+                    return `<h3 style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:#64748b; margin:20px 0 8px; padding-bottom:6px; border-bottom:1px solid #e2e8f0">${line.slice(3)}</h3>`;
+                if (line.trim())
+                    return `<p style="font-size:14px; color:#0f172a; line-height:1.75; margin:0 0 8px">${line}</p>`;
+                return '';
+            }).join('');
+    }
+
+    const protoLabels = { sls: 'SLS nylon printing', fdm: 'FDM printing', resin: 'Resin (SLA)', resin_casting: 'Resin casting (urethane)' };
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CAD Auditor — ${data.file_name}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #0f172a; }
+  .page { max-width: 860px; margin: 0 auto; padding: 40px 24px; }
+  @media print {
+    body { background: white; }
+    .page { padding: 20px; }
+    .no-print { display: none; }
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f8fafc; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #64748b; padding: 8px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  td { border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div style="background:#0f172a; border-radius:12px; padding:24px 28px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between">
+    <div>
+      <div style="font-size:20px; font-weight:700; color:#f8fafc">⬡ CAD Auditor</div>
+      <div style="font-size:13px; color:#94a3b8; margin-top:4px">DFM Review Report</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:14px; font-weight:500; color:#f8fafc">${data.file_name}</div>
+      <div style="font-size:12px; color:#94a3b8; margin-top:2px">${date}</div>
+    </div>
+  </div>
+
+  <div style="background:${sevBg}; border:1.5px solid ${sevColor}33; border-radius:10px; padding:18px 22px; margin-bottom:20px; display:flex; align-items:center; gap:14px">
+    <div style="font-size:32px">${overall === 'pass' ? '✅' : overall === 'medium' ? '🟡' : overall === 'high' ? '🔴' : '⚪'}</div>
+    <div>
+      <div style="font-size:20px; font-weight:700; color:${sevColor}">${overall.toUpperCase()} SEVERITY</div>
+      <div style="font-size:13px; color:#64748b; margin-top:2px">Overall DFM assessment for ${data.file_name}</div>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px">
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; padding:16px 18px">
+      <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:#64748b; margin-bottom:10px">Part Summary</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+        <div><div style="font-family:monospace; font-size:15px; font-weight:500">${m.face_count.toLocaleString()}</div><div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em">Faces</div></div>
+        <div><div style="font-family:monospace; font-size:13px; font-weight:500">${bb.x}×${bb.y}×${bb.z}</div><div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em">Bounding box (mm)</div></div>
+        <div><div style="font-family:monospace; font-size:15px; font-weight:500">${m.is_watertight ? 'Yes' : 'No'}</div><div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em">Watertight</div></div>
+        <div><div style="font-family:monospace; font-size:13px; font-weight:500">${m.surface_area_mm2.toLocaleString()} mm²</div><div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em">Surface area</div></div>
+      </div>
+    </div>
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; padding:16px 18px">
+      <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:#64748b; margin-bottom:10px">Manufacturing Context</div>
+      ${[
+        ['Material', data.material_name || 'ABS'],
+        ['Prototype method', protoLabels[f.prototype_method] || f.prototype_method || '—'],
+        ['Production method', f.production_method_label || 'Injection molding'],
+        ['Pull direction', `${f.checks.draft_angle?.pull_direction || 'Z'} axis`],
+      ].map(([k, v]) => `<div style="display:flex; justify-content:space-between; padding:3px 0; font-size:13px"><span style="color:#64748b">${k}</span><span style="font-weight:500">${v}</span></div>`).join('')}
+    </div>
+  </div>
+
+  <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:20px; overflow:hidden">
+    <div style="padding:14px 18px; background:#f8fafc; border-bottom:1px solid #e2e8f0">
+      <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:#64748b">Check Results</div>
+    </div>
+    <table>
+      <thead><tr><th style="width:140px">Check</th><th style="width:90px">Severity</th><th>Finding</th><th style="width:100px">When to fix</th></tr></thead>
+      <tbody>${checkRows()}</tbody>
+    </table>
+  </div>
+
+  <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; padding:22px 24px; margin-bottom:20px">
+    <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:#64748b; margin-bottom:16px">DFM Assessment</div>
+    ${formatAssessment(data.interpretation)}
+  </div>
+
+  <div style="font-size:11px; color:#94a3b8; text-align:center; padding:16px 0; border-top:1px solid #e2e8f0">
+    Geometric analysis is deterministic. Interpretation generated by Claude. Your STL file was deleted after processing. Only measurement data reached the AI provider.
+  </div>
+
+  <div class="no-print" style="text-align:center; margin-top:20px">
+    <button onclick="window.print()" style="background:#2563eb; color:white; border:none; border-radius:8px; padding:10px 24px; font-size:14px; cursor:pointer">Print / Save as PDF</button>
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
 // ── Version comparison ─────────────────────────────────────────
 
 const SEV_ORDER_CMP = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
@@ -448,6 +691,7 @@ const CHECK_DISPLAY = {
     undercuts:           'Undercuts',
     rib_thickness_proxy: 'Rib Thickness',
     sharp_corners:       'Sharp Corners',
+    boss_detection:      'Boss Detection',
 };
 
 document.getElementById('compare-toggle').addEventListener('click', () => {
@@ -463,8 +707,22 @@ document.getElementById('compare-toggle').addEventListener('click', () => {
                 Revision will use the same settings:
                 <strong>${f.production_method_label || 'Injection molding'}</strong> ·
                 <strong>${firstAnalysisData.material_name || 'ABS'}</strong> ·
-                <strong>${f.checks.draft_angle.pull_direction} axis</strong>
+                <strong>${f.checks.draft_angle?.pull_direction || 'Z'} axis</strong>
             </p>`;
+
+        const history  = getHistory();
+        const baseline = document.getElementById('compare-baseline');
+        const baseWrap = document.getElementById('compare-baseline-wrap');
+
+        if (history.length > 1 && baseline) {
+            baseline.innerHTML = history.map((h, i) =>
+                `<option value="${i}">${i === 0 ? 'Current' : `V${history.length - i}`} — ${h.file_name} (${h.timestamp})</option>`
+            ).join('');
+            baseline.value = '1';
+            baseWrap.hidden = false;
+        } else {
+            if (baseWrap) baseWrap.hidden = true;
+        }
     }
 });
 
@@ -506,12 +764,17 @@ compareAnalyzeBtn.addEventListener('click', async () => {
     document.getElementById('compare-results').hidden  = true;
     compareAnalyzeBtn.disabled = true;
 
-    const f = firstAnalysisData.findings;
+    const history     = getHistory();
+    const baselineIdx = parseInt(document.getElementById('compare-baseline')?.value ?? '0', 10);
+    const baseline    = history[baselineIdx] ?? firstAnalysisData;
+    const baseFindings = baseline?.findings ?? firstAnalysisData?.findings;
+
+    const f = baseFindings;
     const formData = new FormData();
     formData.append('file',             compareFile);
-    formData.append('pull_direction',   f.checks.draft_angle.pull_direction || 'Z');
+    formData.append('pull_direction',   f.checks.draft_angle?.pull_direction || 'Z');
     formData.append('prototype_method', f.prototype_method || 'sls');
-    formData.append('production_method',f.production_method || 'injection_molding');
+    formData.append('production_method', f.production_method || 'injection_molding');
     formData.append('material',         firstAnalysisData.material || 'abs');
 
     try {
@@ -526,7 +789,7 @@ compareAnalyzeBtn.addEventListener('click', async () => {
             return;
         }
 
-        renderComparison(firstAnalysisData.findings, data.findings, compareFile.name);
+        renderComparison(baseFindings, data.findings, compareFile.name);
         document.getElementById('compare-results').hidden = false;
 
     } catch (err) {
@@ -535,6 +798,57 @@ compareAnalyzeBtn.addEventListener('click', async () => {
         alert('Could not reach the server.');
     }
 });
+
+function getPct(check) {
+    const name = check.category;
+    if (name === 'draft_angle' || name === 'undercuts') {
+        const total = check.face_count_total;
+        if (total > 0) return check.face_count_flagged / total * 100;
+    } else if (name === 'sharp_corners') {
+        if (check.n_edges_analyzed > 0)
+            return check.n_edges_flagged / check.n_edges_analyzed * 100;
+    } else if (name === 'wall_thickness') {
+        return ((check.pct_too_thin || 0) + (check.pct_too_thick || 0)) * 100;
+    } else if (name === 'rib_thickness_proxy') {
+        return (check.pct_exceeding_ratio || 0) * 100;
+    }
+    return null;
+}
+
+function generateWhatToFixNext(after, cmpResult) {
+    const improved  = Object.entries(cmpResult.checks).filter(([_, c]) => c.status === 'improved' || c.status === 'resolved');
+    const worse     = Object.entries(cmpResult.checks).filter(([_, c]) => c.status === 'worse'    || c.status === 'new_issue');
+
+    const remaining = Object.entries(after.checks)
+        .filter(([_, c]) => {
+            const s = (c.effective_severity || c.severity || 'pass').toLowerCase();
+            return s !== 'pass' && s !== 'inconclusive';
+        })
+        .sort((a, b) =>
+            (SEV_ORDER_CMP[(a[1].effective_severity || a[1].severity || 'pass').toLowerCase()] ?? 4) -
+            (SEV_ORDER_CMP[(b[1].effective_severity || b[1].severity || 'pass').toLowerCase()] ?? 4)
+        );
+
+    let msg = cmpResult.overall.trend === 'improved' ? 'This revision is an improvement. '
+            : cmpResult.overall.trend === 'worse'    ? 'This revision introduced new issues. '
+            :                                          'Overall severity is unchanged. ';
+
+    if (improved.length > 0)
+        msg += `${improved.map(([k]) => CHECK_DISPLAY[k] || k).join(' and ')} improved. `;
+
+    if (worse.length > 0)
+        msg += `Watch out: ${worse.map(([k]) => CHECK_DISPLAY[k] || k).join(' and ')} got worse. `;
+
+    if (remaining.length > 0) {
+        const [topName, topCheck] = remaining[0];
+        const sev = (topCheck.effective_severity || topCheck.severity || '').toLowerCase();
+        msg += `Your highest remaining issue is ${CHECK_DISPLAY[topName] || topName} at ${sev.toUpperCase()} severity — address this before committing to production tooling.`;
+    } else {
+        msg += 'All checks are now passing. The part is ready for the next stage.';
+    }
+
+    return msg;
+}
 
 function compareFindings(before, after) {
     const result = {
@@ -575,17 +889,23 @@ function compareFindings(before, after) {
             bCount = b.n_edges_flagged ?? null;
             aCount = a.n_edges_flagged ?? null;
         } else if (checkName === 'wall_thickness') {
-            bCount = (b.thin_face_indices?.length ?? 0) + (b.thick_face_indices?.length ?? 0);
-            aCount = (a.thin_face_indices?.length ?? 0) + (a.thick_face_indices?.length ?? 0);
+            bCount = (b.thin_face_indices?.length ?? b.thin_face_count ?? 0)
+                   + (b.thick_face_indices?.length ?? b.thick_face_count ?? 0);
+            aCount = (a.thin_face_indices?.length ?? a.thin_face_count ?? 0)
+                   + (a.thick_face_indices?.length ?? a.thick_face_count ?? 0);
         } else if (checkName === 'rib_thickness_proxy') {
-            bCount = b.rib_flagged_face_indices?.length ?? null;
-            aCount = a.rib_flagged_face_indices?.length ?? null;
+            bCount = b.rib_flagged_face_indices?.length ?? b.rib_flagged_count ?? null;
+            aCount = a.rib_flagged_face_indices?.length ?? a.rib_flagged_count ?? null;
         }
+
+        const bPct = getPct(b);
+        const aPct = getPct(a);
 
         result.checks[checkName] = {
             bSev, aSev, status,
             bCount, aCount,
             delta: (bCount !== null && aCount !== null) ? aCount - bCount : null,
+            bPct, aPct,
         };
     }
 
@@ -614,11 +934,16 @@ function renderComparison(before, after, newFileName) {
         return `<span class="sev-badge sev-${s}">${s}</span>`;
     }
 
-    function deltaStr(d) {
-        if (d === null) return '';
-        if (d === 0)    return '<span class="cmp-delta-zero">±0</span>';
-        if (d < 0)      return `<span class="cmp-delta-better">▼ ${Math.abs(d).toLocaleString()}</span>`;
-        return              `<span class="cmp-delta-worse">▲ ${d.toLocaleString()}</span>`;
+    function deltaStr(c) {
+        const d    = c.delta;
+        const bPct = c.bPct !== null && c.bPct !== undefined ? c.bPct.toFixed(1) + '%' : null;
+        const aPct = c.aPct !== null && c.aPct !== undefined ? c.aPct.toFixed(1) + '%' : null;
+        const pctStr = (bPct && aPct) ? ` (${bPct} → ${aPct})` : '';
+
+        if (d === null)  return '';
+        if (d === 0)     return `<span class="cmp-delta-zero">±0${pctStr}</span>`;
+        if (d < 0)       return `<span class="cmp-delta-better">▼ ${Math.abs(d).toLocaleString()}${pctStr}</span>`;
+        return               `<span class="cmp-delta-worse">▲ ${d.toLocaleString()}${pctStr}</span>`;
     }
 
     const summaryParts = [];
@@ -639,10 +964,12 @@ function renderComparison(before, after, newFileName) {
                 <span class="cmp-arrow">→</span>
                 ${sevBadge(c.aSev)}
             </div>
-            ${c.delta !== null ? `<span class="cmp-delta">${deltaStr(c.delta)}</span>` : '<span></span>'}
+            ${c.delta !== null ? `<span class="cmp-delta">${deltaStr(c)}</span>` : '<span></span>'}
             <span class="cmp-status-tag ${sm.cls}">${sm.label}</span>
         </div>`;
     }
+
+    const nextSteps = generateWhatToFixNext(after, cmp);
 
     document.getElementById('compare-results').innerHTML = `
         <div class="cmp-overall">
@@ -656,5 +983,9 @@ function renderComparison(before, after, newFileName) {
             </div>
         </div>
         <div class="cmp-summary">${summaryParts.join(' · ')}</div>
-        <div class="cmp-rows">${rows}</div>`;
+        <div class="cmp-rows">${rows}</div>
+        <div class="cmp-next-steps">
+            <span class="cmp-next-label">What to fix next</span>
+            ${nextSteps}
+        </div>`;
 }

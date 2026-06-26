@@ -80,6 +80,8 @@ def _strip_face_indices(checks: dict) -> dict:
         check.pop("thick_face_thicknesses", None)
         check.pop("rib_flagged_face_indices", None)
         check.pop("rib_flagged_thicknesses", None)
+        check.pop("boss_face_indices", None)
+        check.pop("boss_candidates", None)
     return stripped
 
 

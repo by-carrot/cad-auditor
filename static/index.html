@@ -51,6 +51,7 @@
                         <option value="sls">SLS nylon printing</option>
                         <option value="resin">Resin (SLA) printing</option>
                         <option value="fdm">FDM printing</option>
+                        <option value="resin_casting">Resin casting (urethane)</option>
                     </select>
                     <p class="form-hint">How you will test your first physical sample.</p>
                 </div>
@@ -147,6 +148,7 @@
             <div class="logo"><span class="logo-mark">⬡</span><span class="logo-name">CAD Auditor</span></div>
             <div id="results-meta" class="results-meta"></div>
             <button id="analyze-another" class="btn-ghost">Analyze another file</button>
+            <button id="download-report" class="btn-ghost" hidden>&#8615; Report</button>
         </div>
     </header>
 
@@ -223,6 +225,11 @@
 
             <div class="compare-body" id="compare-body" hidden>
                 <div class="compare-settings" id="compare-settings"></div>
+
+                <div id="compare-baseline-wrap" hidden style="margin-bottom:12px">
+                    <label class="form-label" style="font-size:12px">Compare against</label>
+                    <select id="compare-baseline" class="form-select" style="font-size:13px; margin-top:4px"></select>
+                </div>
 
                 <div id="compare-drop-zone" class="compare-drop">
                     <p class="compare-drop-text">Drop revised STL here or</p>

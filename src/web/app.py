@@ -19,12 +19,14 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from typing import Optional
 
 from src.load_geometry import load_stl
 from src.aggregate import run_all_checks
 from src.stage import apply_stage_labels
 from src.interpret import interpret_findings_staged
 from src.knowledge.loader import get_material_thresholds
+from src.boss_check import detect_bosses
 
 app = FastAPI(title="CAD Auditor", version="1.0.0")
 
@@ -42,6 +44,9 @@ def analyze(
     prototype_method: str = Form(default="sls"),
     production_method: str = Form(default="injection_molding"),
     material: str = Form(default="abs"),
+    custom_min_wall:  Optional[str] = Form(default=None),
+    custom_max_wall:  Optional[str] = Form(default=None),
+    custom_min_draft: Optional[str] = Form(default=None),
 ):
     """
     Accept an STL file, run all five DFM checks, apply two-stage labeling,
@@ -56,9 +61,9 @@ def analyze(
             status_code=422,
         )
 
-    if prototype_method.lower() not in ("sls", "fdm", "resin"):
+    if prototype_method.lower() not in ("sls", "fdm", "resin", "resin_casting"):
         return JSONResponse(
-            {"success": False, "error": "prototype_method must be sls, fdm, or resin"},
+            {"success": False, "error": "prototype_method must be sls, fdm, resin, or resin_casting"},
             status_code=422,
         )
 
@@ -87,6 +92,19 @@ def analyze(
         
         mat_thresholds = get_material_thresholds(material.lower())
 
+        def _parse(val):
+            try:
+                return float(val) if val and val.strip() else None
+            except ValueError:
+                return None
+
+        cmw = _parse(custom_min_wall)
+        cxw = _parse(custom_max_wall)
+        cmd = _parse(custom_min_draft)
+        if cmw is not None: mat_thresholds["min_wall_mm"]       = cmw
+        if cxw is not None: mat_thresholds["max_wall_mm"]       = cxw
+        if cmd is not None: mat_thresholds["min_draft_degrees"] = cmd
+
         findings = run_all_checks(
             mesh,
             pull_direction=pull_direction.upper(),
@@ -101,6 +119,12 @@ def analyze(
             production_method.lower(),
             material_min_wall_mm=mat_thresholds["min_wall_mm"],
         )
+        boss_result = detect_bosses(
+            mesh,
+            staged,
+            nominal_wall_mm=mat_thresholds["nominal_wall_mm"],
+        )
+        staged["checks"]["boss_detection"] = boss_result
         interpretation = interpret_findings_staged(
             staged,
             prototype_method.lower(),
