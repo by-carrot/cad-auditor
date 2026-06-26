@@ -137,7 +137,7 @@ def _apply_production_overrides(checks: dict, production_method: str) -> dict:
     return checks
 
 
-def _compute_overall_effective_severity(checks: dict) -> str:
+def compute_overall_effective_severity(checks: dict) -> str:
     """
     Compute overall severity from effective_severity fields after overrides.
 
@@ -219,12 +219,16 @@ def apply_stage_labels(
     # Sharp corners: prototype methods handle them; production concentrates stress.
     checks["sharp_corners"]["stage_relevance"] = "production_only"
 
+    # Boss detection: structural concern only relevant in production tooling.
+    if "boss_detection" in checks:
+        checks["boss_detection"]["stage_relevance"] = "production_only"
+
     # Apply production method severity overrides ───────────────────────────────
     checks = _apply_production_overrides(checks, prod)
     staged["checks"] = checks
 
     # Recompute overall severity based on effective severities
-    staged["overall_effective_severity"] = _compute_overall_effective_severity(checks)
+    staged["overall_effective_severity"] = compute_overall_effective_severity(checks)
 
     # Metadata ────────────────────────────────────────────────────────────────
     staged["prototype_method"] = method

@@ -44,6 +44,8 @@ let isolated     = false;
 let firstAnalysisData     = null;
 let compareFile           = null;
 let compareFileBuffer     = null;
+let assemblyParts = [];
+let assemblyFile  = null;
 
 const HISTORY_KEY = 'cad_auditor_history';
 const MAX_HISTORY = 3;
@@ -259,6 +261,12 @@ document.getElementById('analyze-another').addEventListener('click', () => {
     firstAnalysisData  = null;
     compareFile        = null;
     compareFileBuffer  = null;
+    assemblyParts = [];
+    assemblyFile  = null;
+    document.getElementById('add-to-assembly').hidden   = true;
+    document.getElementById('assembly-section').hidden  = true;
+    document.getElementById('assembly-file-name').hidden = true;
+    document.getElementById('assembly-analyze-btn').disabled = true;
     document.getElementById('download-report').hidden = true;
     document.getElementById('compare-body').hidden   = true;
     document.getElementById('compare-toggle').textContent = 'Upload revised STL';
@@ -276,6 +284,95 @@ document.getElementById('analyze-another').addEventListener('click', () => {
 });
 
 document.getElementById('reset-cam').addEventListener('click', resetCamera);
+
+document.getElementById('add-to-assembly').addEventListener('click', () => {
+    const section = document.getElementById('assembly-section');
+    section.hidden = !section.hidden;
+    if (!section.hidden) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const f = firstAnalysisData?.findings;
+        if (f) {
+            document.getElementById('assembly-settings').innerHTML = `
+                <p class="compare-settings-note">
+                    Each part will use the same settings:
+                    <strong>${f.production_method_label || 'Injection molding'}</strong> ·
+                    <strong>${firstAnalysisData.material_name || 'ABS'}</strong> ·
+                    pull direction from geometry
+                </p>`;
+        }
+    }
+});
+
+const assemblyDropZone    = document.getElementById('assembly-drop-zone');
+const assemblyFileInput   = document.getElementById('assembly-file-input');
+const assemblyFileNameEl  = document.getElementById('assembly-file-name');
+const assemblyAnalyzeBtn  = document.getElementById('assembly-analyze-btn');
+
+function handleAssemblyFile(file) {
+    if (!file || !file.name.toLowerCase().endsWith('.stl')) {
+        alert('Please select a .stl file.');
+        return;
+    }
+    assemblyFile = file;
+    assemblyFileNameEl.textContent = `✓ ${file.name}  (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+    assemblyFileNameEl.hidden = false;
+    assemblyAnalyzeBtn.disabled = false;
+}
+
+assemblyFileInput.addEventListener('change', () => handleAssemblyFile(assemblyFileInput.files[0]));
+assemblyDropZone.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('file-btn')) assemblyFileInput.click();
+});
+assemblyDropZone.addEventListener('dragover', (e) => { e.preventDefault(); });
+assemblyDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    handleAssemblyFile(e.dataTransfer.files[0]);
+});
+
+assemblyAnalyzeBtn.addEventListener('click', async () => {
+    if (!assemblyFile || !firstAnalysisData) return;
+
+    document.getElementById('assembly-loading').hidden = false;
+    assemblyAnalyzeBtn.disabled = true;
+
+    const f = firstAnalysisData.findings;
+    const formData = new FormData();
+    formData.append('file',             assemblyFile);
+    formData.append('pull_direction',
+        computePullSuggestion(await assemblyFile.arrayBuffer()).suggested || 'Z');
+    formData.append('prototype_method', f.prototype_method || 'sls');
+    formData.append('production_method', f.production_method || 'injection_molding');
+    formData.append('material',          firstAnalysisData.material || 'abs');
+
+    try {
+        const resp = await fetch('/analyze', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        document.getElementById('assembly-loading').hidden = true;
+        assemblyAnalyzeBtn.disabled = false;
+
+        if (!data.success) {
+            alert(`Part analysis failed:\n\n${data.error}`);
+            return;
+        }
+
+        assemblyParts.push({
+            file_name:     data.file_name,
+            material_name: data.material_name,
+            findings:      data.findings,
+        });
+        renderAssemblyPanel();
+
+        assemblyFile = null;
+        assemblyFileNameEl.hidden = true;
+        assemblyAnalyzeBtn.disabled = true;
+
+    } catch (err) {
+        document.getElementById('assembly-loading').hidden = true;
+        assemblyAnalyzeBtn.disabled = false;
+        alert('Could not reach the server.');
+    }
+});
 
 let previewActive = false;
 
@@ -427,7 +524,7 @@ function renderResults(data) {
         <div class="mesh-key">${c.k}</div>
     </div>`).join('');
 
-    const protoLabels = { sls: 'SLS nylon printing', fdm: 'FDM printing', resin: 'Resin (SLA) printing' };
+    const protoLabels = { sls: 'SLS nylon printing', fdm: 'FDM printing', resin: 'Resin (SLA) printing', resin_casting: 'Resin casting (urethane)' };
     const prodLabels = { injection_molding: 'Injection molding', resin_casting: 'Resin casting (urethane)' };
     const pullDir     = f.checks.draft_angle.pull_direction;
     const matName  = data.material_name || 'ABS';
@@ -486,6 +583,9 @@ function renderResults(data) {
             </div>`).join('')
         : `<div class="assessment-text">${data.interpretation}</div>`;
 
+    assemblyParts = [];
+    document.getElementById('assembly-section').hidden = true;
+    document.getElementById('add-to-assembly').hidden  = false;
     document.getElementById('preview-wrap').hidden = false;
     document.getElementById('download-report').hidden = false;
     previewActive = false;
@@ -896,6 +996,9 @@ function compareFindings(before, after) {
         } else if (checkName === 'rib_thickness_proxy') {
             bCount = b.rib_flagged_face_indices?.length ?? b.rib_flagged_count ?? null;
             aCount = a.rib_flagged_face_indices?.length ?? a.rib_flagged_count ?? null;
+        } else if (checkName === 'boss_detection') {
+            bCount = b.n_bosses_detected ?? null;
+            aCount = a.n_bosses_detected ?? null;
         }
 
         const bPct = getPct(b);
@@ -987,5 +1090,109 @@ function renderComparison(before, after, newFileName) {
         <div class="cmp-next-steps">
             <span class="cmp-next-label">What to fix next</span>
             ${nextSteps}
+        </div>`;
+}
+
+// ── Assembly panel ──────────────────────────────────────────────
+
+const SEV_ORDER_ASM = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
+
+function getSev(findings) {
+    return (findings.overall_effective_severity || findings.overall_severity || 'pass').toLowerCase();
+}
+
+function getTopIssue(findings) {
+    const checks = Object.values(findings.checks);
+    checks.sort((a, b) => {
+        const as = (a.effective_severity || a.severity || 'pass').toLowerCase();
+        const bs = (b.effective_severity || b.severity || 'pass').toLowerCase();
+        return (SEV_ORDER_ASM[as] ?? 4) - (SEV_ORDER_ASM[bs] ?? 4);
+    });
+    const top = checks[0];
+    if (!top) return null;
+    const sev = (top.effective_severity || top.severity || 'pass').toLowerCase();
+    if (sev === 'pass') return null;
+    return { name: CHECK_DISPLAY[top.category] || top.category, severity: sev };
+}
+
+function renderAssemblyPanel() {
+    if (!firstAnalysisData) return;
+
+    const allParts = [
+        { file_name: firstAnalysisData.file_name, material_name: firstAnalysisData.material_name, findings: firstAnalysisData.findings },
+        ...assemblyParts,
+    ];
+
+    document.getElementById('assembly-count').textContent = `${allParts.length} part${allParts.length > 1 ? 's' : ''}`;
+
+    // Critical path
+    const criticalPart = allParts.reduce((worst, p) => {
+        return (SEV_ORDER_ASM[getSev(p.findings)] ?? 4) <= (SEV_ORDER_ASM[getSev(worst.findings)] ?? 4) ? p : worst;
+    });
+    const critSev = getSev(criticalPart.findings);
+    const critTop = getTopIssue(criticalPart.findings);
+
+    document.getElementById('assembly-critical').innerHTML = critSev === 'pass'
+        ? `<div class="assembly-critical-pass">✅ All parts pass DFM review. Assembly is ready for production tooling.</div>`
+        : `<div class="assembly-critical-issue">
+            <div class="assembly-critical-label">Critical path</div>
+            <div class="assembly-critical-body">
+                <strong>${criticalPart.file_name}</strong> is the bottleneck at
+                <span class="sev-badge sev-${critSev}">${critSev}</span> severity.
+                ${critTop ? `Primary issue: ${critTop.name}. ` : ''}
+                Resolve this part before committing any part to production tooling.
+            </div>
+           </div>`;
+
+    // Pull direction consistency
+    const pullDirs = allParts.map(p => ({
+        name: p.file_name,
+        dir:  p.findings.checks.draft_angle?.pull_direction || '?',
+    }));
+    const uniqueDirs = [...new Set(pullDirs.map(p => p.dir))];
+    const pullConsistent = uniqueDirs.length === 1;
+
+    document.getElementById('assembly-pull').innerHTML = `
+        <div class="assembly-pull-row">
+            <span class="assembly-pull-icon">${pullConsistent ? '✓' : '⚠'}</span>
+            <div>
+                <span class="assembly-pull-label">Pull directions:</span>
+                ${pullDirs.map(p => `<span class="assembly-pull-tag">${p.name} → <strong>${p.dir}</strong></span>`).join(' ')}
+                ${pullConsistent
+                    ? '<span class="assembly-pull-ok">Consistent — single mold orientation for all parts.</span>'
+                    : '<span class="assembly-pull-warn">Parts require different mold orientations. Each part needs separate tooling setup.</span>'
+                }
+            </div>
+        </div>`;
+
+    // Combined totals
+    let totalDraft = 0, totalUndercut = 0, totalSharp = 0;
+    for (const p of allParts) {
+        totalDraft    += p.findings.checks.draft_angle?.face_count_flagged    || 0;
+        totalUndercut += p.findings.checks.undercuts?.face_count_flagged       || 0;
+        totalSharp    += p.findings.checks.sharp_corners?.n_edges_flagged      || 0;
+    }
+
+    // Per-part cards
+    const partCards = allParts.map((p, i) => {
+        const sev  = getSev(p.findings);
+        const top  = getTopIssue(p.findings);
+        return `
+        <div class="assembly-part-card">
+            <div class="assembly-part-num">Part ${i + 1}</div>
+            <div class="assembly-part-name">${p.file_name}</div>
+            <span class="sev-badge sev-${sev}">${sev}</span>
+            <div class="assembly-part-issue">${top ? top.name : 'No issues'}</div>
+            <div class="assembly-part-faces">${p.findings.mesh_summary.face_count.toLocaleString()} faces</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('assembly-parts').innerHTML = `
+        <div class="assembly-parts-grid">${partCards}</div>
+        <div class="assembly-totals">
+            Assembly totals —
+            Draft: <strong>${totalDraft.toLocaleString()}</strong> faces ·
+            Undercuts: <strong>${totalUndercut.toLocaleString()}</strong> faces ·
+            Sharp edges: <strong>${totalSharp.toLocaleString()}</strong>
         </div>`;
 }

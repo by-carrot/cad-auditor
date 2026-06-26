@@ -23,7 +23,7 @@ from typing import Optional
 
 from src.load_geometry import load_stl
 from src.aggregate import run_all_checks
-from src.stage import apply_stage_labels
+from src.stage import apply_stage_labels, compute_overall_effective_severity
 from src.interpret import interpret_findings_staged
 from src.knowledge.loader import get_material_thresholds
 from src.boss_check import detect_bosses
@@ -125,6 +125,7 @@ def analyze(
             nominal_wall_mm=mat_thresholds["nominal_wall_mm"],
         )
         staged["checks"]["boss_detection"] = boss_result
+        staged["overall_effective_severity"] = compute_overall_effective_severity(staged["checks"])
         interpretation = interpret_findings_staged(
             staged,
             prototype_method.lower(),
