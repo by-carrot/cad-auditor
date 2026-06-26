@@ -41,6 +41,9 @@ const analyzeBtn  = document.getElementById('analyze-btn');
 let selectedFile = null;
 let stlBuffer    = null;
 let isolated     = false;
+let firstAnalysisData     = null;
+let compareFile           = null;
+let compareFileBuffer     = null;
 
 function handleFile(file) {
     if (!file || !file.name.toLowerCase().endsWith('.stl')) {
@@ -166,6 +169,7 @@ analyzeBtn.addEventListener('click', async () => {
         const slider = document.getElementById('severity-slider');
         if (slider) { slider.value = 100; document.getElementById('filter-pct').textContent = 'All'; }
 
+        firstAnalysisData = data;
         renderResults(data);
         showState('results');
 
@@ -194,6 +198,15 @@ document.getElementById('analyze-another').addEventListener('click', () => {
     dropZone.classList.remove('has-file');
     analyzeBtn.disabled = true;
     showState('upload');
+
+    firstAnalysisData  = null;
+    compareFile        = null;
+    compareFileBuffer  = null;
+    document.getElementById('compare-body').hidden   = true;
+    document.getElementById('compare-toggle').textContent = 'Upload revised STL';
+    document.getElementById('compare-file-name').hidden   = true;
+    document.getElementById('compare-analyze-btn').disabled = true;
+    document.getElementById('compare-results').hidden = true;
 
     document.getElementById('pull-hint').hidden = true;
     document.getElementById('custom-min-wall').value  = '';
@@ -423,4 +436,225 @@ function renderResults(data) {
     if (materialNote) materialNote.hidden = true;
     const vpHint = document.getElementById('viewport-hint');
     if (vpHint) vpHint.hidden = false;
+}
+
+// ── Version comparison ─────────────────────────────────────────
+
+const SEV_ORDER_CMP = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
+
+const CHECK_DISPLAY = {
+    draft_angle:         'Draft Angles',
+    wall_thickness:      'Wall Thickness',
+    undercuts:           'Undercuts',
+    rib_thickness_proxy: 'Rib Thickness',
+    sharp_corners:       'Sharp Corners',
+};
+
+document.getElementById('compare-toggle').addEventListener('click', () => {
+    const body = document.getElementById('compare-body');
+    const btn  = document.getElementById('compare-toggle');
+    body.hidden = !body.hidden;
+    btn.textContent = body.hidden ? 'Upload revised STL' : 'Hide';
+
+    if (!body.hidden && firstAnalysisData) {
+        const f = firstAnalysisData.findings;
+        document.getElementById('compare-settings').innerHTML = `
+            <p class="compare-settings-note">
+                Revision will use the same settings:
+                <strong>${f.production_method_label || 'Injection molding'}</strong> ·
+                <strong>${firstAnalysisData.material_name || 'ABS'}</strong> ·
+                <strong>${f.checks.draft_angle.pull_direction} axis</strong>
+            </p>`;
+    }
+});
+
+const compareDropZone  = document.getElementById('compare-drop-zone');
+const compareFileInput = document.getElementById('compare-file-input');
+const compareFileName  = document.getElementById('compare-file-name');
+const compareAnalyzeBtn = document.getElementById('compare-analyze-btn');
+
+function handleCompareFile(file) {
+    if (!file || !file.name.toLowerCase().endsWith('.stl')) {
+        alert('Please select a .stl file.');
+        return;
+    }
+    compareFile = file;
+    compareFileName.textContent = `✓ ${file.name}  (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+    compareFileName.hidden = false;
+    compareAnalyzeBtn.disabled = false;
+
+    const reader = new FileReader();
+    reader.onload = (e) => { compareFileBuffer = e.target.result; };
+    reader.readAsArrayBuffer(file);
+}
+
+compareFileInput.addEventListener('change', () => handleCompareFile(compareFileInput.files[0]));
+
+compareDropZone.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('file-btn')) compareFileInput.click();
+});
+compareDropZone.addEventListener('dragover', (e) => { e.preventDefault(); });
+compareDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    handleCompareFile(e.dataTransfer.files[0]);
+});
+
+compareAnalyzeBtn.addEventListener('click', async () => {
+    if (!compareFile || !firstAnalysisData) return;
+
+    document.getElementById('compare-loading').hidden  = false;
+    document.getElementById('compare-results').hidden  = true;
+    compareAnalyzeBtn.disabled = true;
+
+    const f = firstAnalysisData.findings;
+    const formData = new FormData();
+    formData.append('file',             compareFile);
+    formData.append('pull_direction',   f.checks.draft_angle.pull_direction || 'Z');
+    formData.append('prototype_method', f.prototype_method || 'sls');
+    formData.append('production_method',f.production_method || 'injection_molding');
+    formData.append('material',         firstAnalysisData.material || 'abs');
+
+    try {
+        const resp = await fetch('/analyze', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        document.getElementById('compare-loading').hidden = true;
+        compareAnalyzeBtn.disabled = false;
+
+        if (!data.success) {
+            alert(`Revision analysis failed:\n\n${data.error}`);
+            return;
+        }
+
+        renderComparison(firstAnalysisData.findings, data.findings, compareFile.name);
+        document.getElementById('compare-results').hidden = false;
+
+    } catch (err) {
+        document.getElementById('compare-loading').hidden = true;
+        compareAnalyzeBtn.disabled = false;
+        alert('Could not reach the server.');
+    }
+});
+
+function compareFindings(before, after) {
+    const result = {
+        overall: {
+            before: (before.overall_effective_severity || before.overall_severity || 'pass').toLowerCase(),
+            after:  (after.overall_effective_severity  || after.overall_severity  || 'pass').toLowerCase(),
+        },
+        checks: {},
+        improved: 0,
+        worse:    0,
+        resolved: 0,
+        new_issue: 0,
+        unchanged: 0,
+    };
+
+    for (const checkName of Object.keys(before.checks)) {
+        const b = before.checks[checkName];
+        const a = after.checks[checkName];
+        if (!b || !a) continue;
+
+        const bSev = (b.effective_severity || b.severity || 'pass').toLowerCase();
+        const aSev = (a.effective_severity || a.severity || 'pass').toLowerCase();
+        const bOrd = SEV_ORDER_CMP[bSev] ?? 4;
+        const aOrd = SEV_ORDER_CMP[aSev] ?? 4;
+
+        let status;
+        if      (bSev !== 'pass' && aSev === 'pass') { status = 'resolved';  result.resolved++;  }
+        else if (bSev === 'pass' && aSev !== 'pass') { status = 'new_issue'; result.new_issue++; }
+        else if (aOrd > bOrd)                        { status = 'improved';  result.improved++;  }
+        else if (aOrd < bOrd)                        { status = 'worse';     result.worse++;     }
+        else                                         { status = 'unchanged'; result.unchanged++; }
+
+        let bCount = null, aCount = null;
+        if (checkName === 'draft_angle' || checkName === 'undercuts') {
+            bCount = b.face_count_flagged ?? null;
+            aCount = a.face_count_flagged ?? null;
+        } else if (checkName === 'sharp_corners') {
+            bCount = b.n_edges_flagged ?? null;
+            aCount = a.n_edges_flagged ?? null;
+        } else if (checkName === 'wall_thickness') {
+            bCount = (b.thin_face_indices?.length ?? 0) + (b.thick_face_indices?.length ?? 0);
+            aCount = (a.thin_face_indices?.length ?? 0) + (a.thick_face_indices?.length ?? 0);
+        } else if (checkName === 'rib_thickness_proxy') {
+            bCount = b.rib_flagged_face_indices?.length ?? null;
+            aCount = a.rib_flagged_face_indices?.length ?? null;
+        }
+
+        result.checks[checkName] = {
+            bSev, aSev, status,
+            bCount, aCount,
+            delta: (bCount !== null && aCount !== null) ? aCount - bCount : null,
+        };
+    }
+
+    const bOvd = SEV_ORDER_CMP[result.overall.before] ?? 4;
+    const aOvd = SEV_ORDER_CMP[result.overall.after]  ?? 4;
+    result.overall.trend = aOvd > bOvd ? 'improved' : aOvd < bOvd ? 'worse' : 'unchanged';
+
+    return result;
+}
+
+function renderComparison(before, after, newFileName) {
+    const cmp = compareFindings(before, after);
+
+    const overallEmoji = { improved: '✅', worse: '🔴', unchanged: '➖' };
+    const overallLabel = { improved: 'Overall severity improved', worse: 'Overall severity got worse', unchanged: 'Overall severity unchanged' };
+
+    const statusMeta = {
+        resolved:  { label: 'Resolved',   cls: 'cmp-resolved'  },
+        improved:  { label: 'Improved',   cls: 'cmp-improved'  },
+        new_issue: { label: 'New issue',  cls: 'cmp-worse'     },
+        worse:     { label: 'Got worse',  cls: 'cmp-worse'     },
+        unchanged: { label: 'Unchanged',  cls: 'cmp-unchanged' },
+    };
+
+    function sevBadge(s) {
+        return `<span class="sev-badge sev-${s}">${s}</span>`;
+    }
+
+    function deltaStr(d) {
+        if (d === null) return '';
+        if (d === 0)    return '<span class="cmp-delta-zero">±0</span>';
+        if (d < 0)      return `<span class="cmp-delta-better">▼ ${Math.abs(d).toLocaleString()}</span>`;
+        return              `<span class="cmp-delta-worse">▲ ${d.toLocaleString()}</span>`;
+    }
+
+    const summaryParts = [];
+    if (cmp.resolved  > 0) summaryParts.push(`<span class="cmp-resolved">${cmp.resolved} resolved</span>`);
+    if (cmp.improved  > 0) summaryParts.push(`<span class="cmp-improved">${cmp.improved} improved</span>`);
+    if (cmp.unchanged > 0) summaryParts.push(`<span class="cmp-unchanged">${cmp.unchanged} unchanged</span>`);
+    if (cmp.worse     > 0) summaryParts.push(`<span class="cmp-worse">${cmp.worse} got worse</span>`);
+    if (cmp.new_issue > 0) summaryParts.push(`<span class="cmp-worse">${cmp.new_issue} new issue</span>`);
+
+    let rows = '';
+    for (const [checkName, c] of Object.entries(cmp.checks)) {
+        const sm = statusMeta[c.status];
+        rows += `
+        <div class="cmp-row">
+            <span class="cmp-check-name">${CHECK_DISPLAY[checkName] || checkName}</span>
+            <div class="cmp-sev-change">
+                ${sevBadge(c.bSev)}
+                <span class="cmp-arrow">→</span>
+                ${sevBadge(c.aSev)}
+            </div>
+            ${c.delta !== null ? `<span class="cmp-delta">${deltaStr(c.delta)}</span>` : '<span></span>'}
+            <span class="cmp-status-tag ${sm.cls}">${sm.label}</span>
+        </div>`;
+    }
+
+    document.getElementById('compare-results').innerHTML = `
+        <div class="cmp-overall">
+            <span class="cmp-overall-icon">${overallEmoji[cmp.overall.trend]}</span>
+            <div>
+                <div class="cmp-overall-label">${overallLabel[cmp.overall.trend]}</div>
+                <div class="cmp-overall-subs">
+                    ${sevBadge(cmp.overall.before)} → ${sevBadge(cmp.overall.after)}
+                    &nbsp;·&nbsp; comparing <strong>${newFileName}</strong> against original
+                </div>
+            </div>
+        </div>
+        <div class="cmp-summary">${summaryParts.join(' · ')}</div>
+        <div class="cmp-rows">${rows}</div>`;
 }

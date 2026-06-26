@@ -807,3 +807,128 @@ details[open] .advanced-toggle::before {
     background: rgba(15,23,42,0.6);
     font-style: italic;
 }
+
+/* ── Version comparison ───────────────────────────────────────── */
+.compare-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-top: 24px;
+    box-shadow: var(--shadow);
+}
+
+.compare-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.compare-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--accent);
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.compare-toggle:hover { border-color: var(--accent); }
+
+.compare-body { margin-top: 16px; }
+
+.compare-settings-note {
+    font-size: 12px;
+    color: var(--text-2);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.compare-drop {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.compare-drop:hover { border-color: var(--accent); }
+
+.compare-drop-text { font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+
+/* Comparison results */
+.cmp-overall {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+.cmp-overall-icon { font-size: 28px; line-height: 1; }
+
+.cmp-overall-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+
+.cmp-overall-subs { font-size: 12px; color: var(--text-2); }
+
+.cmp-summary {
+    font-size: 13px;
+    margin-bottom: 14px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.cmp-rows { display: flex; flex-direction: column; gap: 6px; }
+
+.cmp-row {
+    display: grid;
+    grid-template-columns: 150px 1fr 100px 100px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.cmp-check-name { font-weight: 500; color: var(--text); }
+
+.cmp-sev-change {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cmp-arrow { color: var(--text-2); font-size: 12px; }
+
+.cmp-delta { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+.cmp-status-tag {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+/* Status colors */
+.cmp-resolved  { color: #16a34a; background: #f0fdf4; }
+.cmp-improved  { color: #2563eb; background: #eff6ff; }
+.cmp-unchanged { color: #64748b; background: #f1f5f9; }
+.cmp-worse     { color: #dc2626; background: #fef2f2; }
+
+.cmp-delta-better { color: #16a34a; }
+.cmp-delta-worse  { color: #dc2626; }
+.cmp-delta-zero   { color: #64748b; }
