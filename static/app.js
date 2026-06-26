@@ -43,7 +43,6 @@ let stlBuffer    = null;
 let isolated     = false;
 let firstAnalysisData     = null;
 let compareFile           = null;
-let compareFileBuffer     = null;
 let assemblyParts = [];
 let assemblyFile  = null;
 
@@ -81,6 +80,8 @@ function stripFindingsForHistory(findings) {
             thin_face_count:    check.thin_face_indices?.length ?? 0,
             thick_face_count:   check.thick_face_indices?.length ?? 0,
             rib_flagged_count:  check.rib_flagged_face_indices?.length ?? 0,
+            n_bosses_detected:  check.n_bosses_detected   ?? 0,
+            worst_wall_ratio:   check.worst_wall_ratio     ?? null,
         };
     }
     return stripped;
@@ -260,7 +261,6 @@ document.getElementById('analyze-another').addEventListener('click', () => {
 
     firstAnalysisData  = null;
     compareFile        = null;
-    compareFileBuffer  = null;
     assemblyParts = [];
     assemblyFile  = null;
     document.getElementById('add-to-assembly').hidden   = true;
@@ -300,6 +300,7 @@ document.getElementById('add-to-assembly').addEventListener('click', () => {
                     pull direction from geometry
                 </p>`;
         }
+        renderAssemblyPanel();
     }
 });
 
@@ -783,7 +784,6 @@ function buildReportHTML(data) {
 
 // ── Version comparison ─────────────────────────────────────────
 
-const SEV_ORDER_CMP = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
 
 const CHECK_DISPLAY = {
     draft_angle:         'Draft Angles',
@@ -842,7 +842,6 @@ function handleCompareFile(file) {
     compareAnalyzeBtn.disabled = false;
 
     const reader = new FileReader();
-    reader.onload = (e) => { compareFileBuffer = e.target.result; };
     reader.readAsArrayBuffer(file);
 }
 
@@ -925,8 +924,8 @@ function generateWhatToFixNext(after, cmpResult) {
             return s !== 'pass' && s !== 'inconclusive';
         })
         .sort((a, b) =>
-            (SEV_ORDER_CMP[(a[1].effective_severity || a[1].severity || 'pass').toLowerCase()] ?? 4) -
-            (SEV_ORDER_CMP[(b[1].effective_severity || b[1].severity || 'pass').toLowerCase()] ?? 4)
+            (SEV_ORDER[(a[1].effective_severity || a[1].severity || 'pass').toLowerCase()] ?? 4) -
+            (SEV_ORDER[(b[1].effective_severity || b[1].severity || 'pass').toLowerCase()] ?? 4)
         );
 
     let msg = cmpResult.overall.trend === 'improved' ? 'This revision is an improvement. '
@@ -971,8 +970,8 @@ function compareFindings(before, after) {
 
         const bSev = (b.effective_severity || b.severity || 'pass').toLowerCase();
         const aSev = (a.effective_severity || a.severity || 'pass').toLowerCase();
-        const bOrd = SEV_ORDER_CMP[bSev] ?? 4;
-        const aOrd = SEV_ORDER_CMP[aSev] ?? 4;
+        const bOrd = SEV_ORDER[bSev] ?? 4;
+        const aOrd = SEV_ORDER[aSev] ?? 4;
 
         let status;
         if      (bSev !== 'pass' && aSev === 'pass') { status = 'resolved';  result.resolved++;  }
@@ -1012,8 +1011,8 @@ function compareFindings(before, after) {
         };
     }
 
-    const bOvd = SEV_ORDER_CMP[result.overall.before] ?? 4;
-    const aOvd = SEV_ORDER_CMP[result.overall.after]  ?? 4;
+    const bOvd = SEV_ORDER[result.overall.before] ?? 4;
+    const aOvd = SEV_ORDER[result.overall.after]  ?? 4;
     result.overall.trend = aOvd > bOvd ? 'improved' : aOvd < bOvd ? 'worse' : 'unchanged';
 
     return result;
@@ -1095,7 +1094,6 @@ function renderComparison(before, after, newFileName) {
 
 // ── Assembly panel ──────────────────────────────────────────────
 
-const SEV_ORDER_ASM = { high: 0, medium: 1, low: 2, pass: 3, inconclusive: 4 };
 
 function getSev(findings) {
     return (findings.overall_effective_severity || findings.overall_severity || 'pass').toLowerCase();
@@ -1106,7 +1104,7 @@ function getTopIssue(findings) {
     checks.sort((a, b) => {
         const as = (a.effective_severity || a.severity || 'pass').toLowerCase();
         const bs = (b.effective_severity || b.severity || 'pass').toLowerCase();
-        return (SEV_ORDER_ASM[as] ?? 4) - (SEV_ORDER_ASM[bs] ?? 4);
+        return (SEV_ORDER[as] ?? 4) - (SEV_ORDER[bs] ?? 4);
     });
     const top = checks[0];
     if (!top) return null;
@@ -1127,7 +1125,7 @@ function renderAssemblyPanel() {
 
     // Critical path
     const criticalPart = allParts.reduce((worst, p) => {
-        return (SEV_ORDER_ASM[getSev(p.findings)] ?? 4) <= (SEV_ORDER_ASM[getSev(worst.findings)] ?? 4) ? p : worst;
+        return (SEV_ORDER[getSev(p.findings)] ?? 4) <= (SEV_ORDER[getSev(worst.findings)] ?? 4) ? p : worst;
     });
     const critSev = getSev(criticalPart.findings);
     const critTop = getTopIssue(criticalPart.findings);
