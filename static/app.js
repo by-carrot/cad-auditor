@@ -1,4 +1,4 @@
-import { initViewer, toggleLayer, resetCamera, focusOnCheck, setIsolationMode, setSeverityFilter, computePullSuggestion } from '/static/viewer.js';const states = {
+import { initViewer, toggleLayer, resetCamera, focusOnCheck, setIsolationMode, setSeverityFilter, computePullSuggestion, setMaterialPreview, getMaterialPresets } from '/static/viewer.js';const states = {
     upload:  document.getElementById('state-upload'),
     loading: document.getElementById('state-loading'),
     results: document.getElementById('state-results'),
@@ -200,9 +200,47 @@ document.getElementById('analyze-another').addEventListener('click', () => {
     document.getElementById('custom-max-wall').value  = '';
     document.getElementById('custom-min-draft').value = '';
     updateThresholdPlaceholders();
+    document.getElementById('preview-wrap').hidden = true;
+    previewActive = false;
 });
 
 document.getElementById('reset-cam').addEventListener('click', resetCamera);
+
+let previewActive = false;
+
+document.getElementById('preview-toggle').addEventListener('click', () => {
+    previewActive = !previewActive;
+    const btn    = document.getElementById('preview-toggle');
+    const sel    = document.getElementById('preview-select');
+    const note   = document.getElementById('material-note');
+    const hint   = document.getElementById('viewport-hint');
+
+    if (previewActive) {
+        btn.textContent = 'Back to DFM view';
+        btn.classList.add('preview-active');
+        sel.hidden = false;
+        setMaterialPreview(sel.value, true);
+        const presets = getMaterialPresets();
+        note.textContent = presets[sel.value]?.note || '';
+        note.hidden = false;
+        hint.hidden = true;
+    } else {
+        btn.textContent = 'Material preview';
+        btn.classList.remove('preview-active');
+        sel.hidden = true;
+        setMaterialPreview(null, false);
+        note.hidden = true;
+        hint.hidden = false;
+    }
+});
+
+document.getElementById('preview-select').addEventListener('change', (e) => {
+    if (!previewActive) return;
+    setMaterialPreview(e.target.value, true);
+    const presets = getMaterialPresets();
+    const note = document.getElementById('material-note');
+    note.textContent = presets[e.target.value]?.note || '';
+});
 
 document.getElementById('severity-slider').addEventListener('input', (e) => {
     const val = parseInt(e.target.value);
@@ -371,4 +409,18 @@ function renderResults(data) {
                 <div class="assessment-text">${s.lines.join('\n').trim()}</div>
             </div>`).join('')
         : `<div class="assessment-text">${data.interpretation}</div>`;
+
+    document.getElementById('preview-wrap').hidden = false;
+    previewActive = false;
+    const previewBtn = document.getElementById('preview-toggle');
+    if (previewBtn) {
+        previewBtn.textContent = 'Material preview';
+        previewBtn.classList.remove('preview-active');
+    }
+    const previewSel = document.getElementById('preview-select');
+    if (previewSel) previewSel.hidden = true;
+    const materialNote = document.getElementById('material-note');
+    if (materialNote) materialNote.hidden = true;
+    const vpHint = document.getElementById('viewport-hint');
+    if (vpHint) vpHint.hidden = false;
 }

@@ -166,11 +166,22 @@
         </section>
 
         <!-- 3D VIEWPORT -->
-        <section class="viewport-section">
+        <section class="viewport-section viewport-section-wide">
             <div class="viewport-header">
                 <p class="panel-label" style="margin:0">3D View</p>
                 <button class="btn-reset-cam" id="reset-cam">Reset view</button>
                 <button class="btn-reset-cam" id="isolate-btn">Isolate flagged</button>
+                 <div class="preview-wrap" id="preview-wrap" hidden>
+                    <button class="btn-preview-toggle" id="preview-toggle">
+                        Material preview
+                    </button>
+                    <select class="preview-select" id="preview-select" hidden>
+                        <option value="ceramic_coated">Ceramic coated</option>
+                        <option value="resin_cast">Resin cast</option>
+                        <option value="zamak_diecast">Zamak die cast</option>
+                        <option value="cnc_prototype">CNC prototype</option>
+                    </select>
+                </div>
                 <div class="filter-row">
                     <span class="filter-label">Worst</span>
                     <input type="range" id="severity-slider" min="5" max="100" step="5" value="100" class="severity-slider">
@@ -179,7 +190,8 @@
             </div>
             <canvas id="dfm-canvas" class="dfm-canvas"></canvas>
             <div id="viewport-legend" class="viewport-legend" hidden></div>
-            <p class="viewport-hint">Drag to rotate · Scroll to zoom · Click a highlighted face to jump to its finding · Yellow lines = sharp corners</p>
+            <p class="viewport-hint">Drag to rotate · Scroll to zoom · Ctrl + drag to pan · Click a highlighted face to jump to its finding · Yellow lines = sharp corners</p>
+            <p class="material-note" id="material-note" hidden></p>
         </section>
         <section class="checks-section">
             <div id="prototype-findings" class="stage-block" hidden>

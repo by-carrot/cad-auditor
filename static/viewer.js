@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -44,11 +45,48 @@ let thresholds = {
     wall_max:    4.0,
     rib_threshold: 4.17,
 };
+
+const MATERIAL_PRESETS = {
+    ceramic_coated: {
+        label:     'Ceramic coated — final finish',
+        color:     0xc4bfb8,
+        roughness: 0.93,
+        metalness: 0.0,
+        note:      'Warm stone-grey matte. Simulates the spray-applied ceramic texture coat on resin or zamak substrate.',
+    },
+    resin_cast: {
+        label:     'Polyurethane resin cast — validation run',
+        color:     0xd8d2c8,
+        roughness: 0.72,
+        metalness: 0.0,
+        note:      'Off-white matte. Simulates raw urethane cast before surface coating.',
+    },
+    zamak_diecast: {
+        label:     'Zamak die cast — production scale',
+        color:     0xa8a8ab,
+        roughness: 0.18,
+        metalness: 0.88,
+        needsEnv:  true,
+        note:      'Cool zinc-alloy grey. Requires environment map for accurate reflections.',
+    },
+    cnc_prototype: {
+        label:     'CNC machined resin — early prototype',
+        color:     0xece6db,
+        roughness: 0.48,
+        metalness: 0.0,
+        note:      'Warm cream. Simulates machined resin block before moulding commitment.',
+    },
+};
+
 let isolationMode = false;
 const ISOLATION_HIDE = new THREE.Color(0x1e293b); // matches scene background
 let tooltip = null;
 let animFrameId = null;
 let edgeLines = null;
+
+let previewMode    = false;
+let envMap         = null;
+let dfmMaterial    = null;
 
 
 // ── Color computation ──────────────────────────────────────────────────────
@@ -283,6 +321,47 @@ export function setIsolationMode(active) {
     rebuildColors();
 }
 
+export function setMaterialPreview(materialKey, active) {
+    if (!meshObj || !renderer) return;
+
+    if (!active) {
+        // Restore DFM vertex-color material
+        if (dfmMaterial) meshObj.material = dfmMaterial;
+        scene.environment = null;
+        previewMode = false;
+        return;
+    }
+
+    // Save DFM material once
+    if (!dfmMaterial) dfmMaterial = meshObj.material;
+
+    const preset = MATERIAL_PRESETS[materialKey];
+    if (!preset) return;
+
+    // Build room environment for metallic presets (once per session)
+    if (preset.needsEnv && !envMap) {
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        envMap = pmrem.fromScene(new THREE.RoomEnvironment(0.5)).texture;
+        pmrem.dispose();
+    }
+
+    scene.environment = preset.needsEnv ? envMap : null;
+
+    meshObj.material = new THREE.MeshStandardMaterial({
+        color:      preset.color,
+        roughness:  preset.roughness,
+        metalness:  preset.metalness,
+        side:       THREE.DoubleSide,
+        envMapIntensity: preset.needsEnv ? 1.2 : 0,
+    });
+
+    previewMode = true;
+}
+
+export function getMaterialPresets() {
+    return MATERIAL_PRESETS;
+}
+
 // ── Tooltip helpers ────────────────────────────────────────────────────────
 
 function formatMeasurement(checkName, measurement) {
@@ -399,11 +478,15 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
     document.body.appendChild(tooltip);
 
     faceMap.clear();
-    edgeLines = null;
-    severityFilter  = 1.0;
+    edgeLines        = null;
+    severityFilter   = 1.0;
     filterThresholds = {};
-    activeLayers = new Set(['draft_angle', 'undercuts', 'sharp_corners', 'wall_thickness', 'rib_thickness']);
+    activeLayers     = new Set(['draft_angle', 'undercuts', 'sharp_corners', 'wall_thickness', 'rib_thickness']);
+    previewMode      = false;
+    dfmMaterial      = null;
+    if (scene) scene.environment = null;
 
+    
     // Pull thresholds from live findings
     const draftCheck    = findings.checks.draft_angle;
     const undercutCheck = findings.checks.undercuts;
