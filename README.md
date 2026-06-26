@@ -1,6 +1,6 @@
 # CAD Auditor
 
-DFM reviewer for injection molding and resin casting. Upload an STL file, select your prototype and production method, and get a structured report separating what needs fixing before your first prototype from what needs fixing before production tooling — with a 3D view showing exactly which faces are flagged.
+DFM reviewer for injection molding and resin casting. Upload an STL file, select your material, prototype method, and production method, and get a structured report separating what needs fixing before your first prototype from what needs fixing before production tooling — with a full-width 3D viewport showing exactly which faces and edges are flagged, colored by check type and severity.
 
 ## The Problem
 
@@ -12,19 +12,17 @@ The browser dashboard renders after upload. No setup required beyond cloning the
 
 ![Dashboard showing HIGH severity result with 3D viewport, check cards ordered by severity, and DFM assessment](docs/dashboard.png)
 
-*Screenshot pending. Run locally with `uvicorn src.web.app:app --reload` and upload any STL to see the dashboard.*
-
 ## What It Catches
 
-| Check | What it measures | Injection molding threshold | Resin casting threshold |
-|---|---|---|---|
-| Draft angles | Face normal alignment vs. pull direction | Less than 1.0° flagged | Advisory only — silicone releases without draft |
-| Wall thickness | Ray casting distance through solid | Less than 1.5mm or greater than 4.0mm | Less than 0.5mm flagged |
-| Undercuts | Face normals opposing pull direction | More than 15° past perpendicular — side action required | Acceptable — silicone stretches over undercuts |
-| Rib thickness proxy | Local thickness vs. nominal wall ratio | Greater than 60% of nominal wall | Same threshold — sink marks occur in both processes |
-| Sharp corners | Interior dihedral angle at mesh edges | Less than 45° flagged | Same threshold — stress concentration in cured resin |
+| Check | What it measures | Injection molding threshold | Resin casting threshold | 3D visualization |
+|---|---|---|---|---|
+| Draft angles | Face normal alignment vs. pull direction | Less than 1.0° flagged (material-adjusted) | Advisory only — silicone releases without draft | Red gradient per face |
+| Wall thickness | Ray casting distance through solid | Less than min or greater than max per material | Less than 0.5mm flagged | Blue (thin) and purple (thick) per sampled face |
+| Undercuts | Face normals opposing pull direction | More than 15° past perpendicular — side action required | Acceptable — silicone stretches over undercuts | Orange gradient per face |
+| Rib thickness proxy | Local thickness vs. nominal wall ratio | Greater than 60% of nominal wall | Same threshold — sink marks occur in both processes | Pink per sampled face |
+| Sharp corners | Interior dihedral angle at mesh edges | Less than 45° flagged | Same threshold — stress concentration in cured resin | Yellow lines along flagged edges |
 
-All five checks run on every submission regardless of production method. Severity labels are overridden per-check based on what actually matters for the chosen process.
+All five checks run on every submission regardless of production method. Severity labels are overridden per-check based on what actually matters for the chosen process. Material selection adjusts wall thickness and draft angle thresholds for ABS, PP, PC, Nylon PA6, and TPE.
 
 ## Architecture and Design Decisions
 
@@ -43,25 +41,34 @@ The model never computes geometry. Draft angles are trigonometry: the dot produc
 On a 335,930 face mesh, the flagged face index list from the draft check alone produced a prompt of 1,120,344 tokens, exceeding the context window. Face indices carry no interpretable meaning for a language model. The fix strips index lists before serialization to the prompt but preserves them in the API JSON response so the 3D viewport renderer can color individual flagged faces. This is a clean separation: the LLM never sees raw geometry references, and the 3D renderer never needs to make its own API call.
 
 **Web layer: FastAPI over Flask.**
-FastAPI was chosen because it uses Pydantic for automatic request and response validation, generates API documentation automatically, and handles file uploads via `python-multipart` with minimal configuration. More importantly, FastAPI is the current industry default for Python AI backends at growth-stage companies. The geometry pipeline runs synchronously inside the endpoint because trimesh and numpy operations are CPU-bound, not I/O-bound. Using `async def` with CPU-bound work blocks the event loop. For a local server with one user at a time, synchronous is correct. A production deployment at scale would require moving geometry processing to a background task queue.
+FastAPI was chosen because it uses Pydantic for automatic request and response validation, generates API documentation automatically, and handles file uploads via `python-multipart` with minimal configuration. The geometry pipeline runs synchronously inside the endpoint because trimesh and numpy operations are CPU-bound, not I/O-bound. Using `async def` with CPU-bound work blocks the event loop. For a local server with one user at a time, synchronous is correct.
 
 **Two-stage reporting design.**
-The report separates findings into two sections: what needs fixing before the current prototype attempt, and what needs fixing before production tooling. The split is governed by the chosen prototype method. SLS, FDM, and resin printing are forgiving on draft, undercuts, and wall thickness down to 0.5mm to 1.0mm depending on process. Injection molding and resin casting are strict on different criteria. A single list of findings ordered only by severity produces noise that erodes user trust: a draft violation that is irrelevant to the SLS prototype and critical to the injection mold should be clearly labeled, not mixed with findings that need action immediately. The `stage.py` module applies `stage_relevance` labels to each check based on prototype method thresholds.
+The report separates findings into two sections: what needs fixing before the current prototype attempt, and what needs fixing before production tooling. The split is governed by the chosen prototype method. SLS, FDM, and resin printing are forgiving on draft, undercuts, and wall thickness down to 0.5mm to 1.0mm depending on process. A single list of findings ordered only by severity produces noise that erodes user trust: a draft violation that is irrelevant to the SLS prototype and critical to the injection mold should be clearly labeled, not mixed with findings that need action immediately.
 
 **Production method severity overrides.**
-The geometry pipeline runs against fixed injection molding thresholds because those are the defaults. For resin casting, the same geometry produces different risk profiles: draft violations are advisory because silicone releases without draft, undercut findings are non-issues because silicone stretches over them, and wall thickness minimum drops from 1.5mm to 0.5mm. The `stage.py` module computes `effective_severity` for each check based on the production method selected and passes both raw and effective severity to the frontend and interpretation layer. The LLM receives effective severity, so the interpretation reflects what actually matters for the chosen process, not what would matter for injection molding.
+The geometry pipeline runs against fixed thresholds because those are the defaults. For resin casting, the same geometry produces different risk profiles: draft violations are advisory because silicone releases without draft, undercut findings are non-issues because silicone stretches over them, and wall thickness minimum drops to 0.5mm. The `stage.py` module computes `effective_severity` for each check based on the production method selected. The severity banner uses `overall_effective_severity` not raw geometry severity, so a resin casting analysis on a part with only draft and undercut violations correctly shows a lower severity than the same part analyzed for injection molding.
+
+**Material-specific thresholds.**
+Wall thickness and draft angle thresholds vary significantly by resin. PP minimum wall is 0.8mm versus 1.5mm for ABS. PC minimum draft is 1.5° versus 1.0° for ABS. TPE requires 3.0° minimum draft because soft materials grip mold surfaces harder during ejection. The `materials.json` file stores five material profiles. Selecting a material at upload time recalibrates all five checks through `aggregate.run_all_checks()` without touching any check module. An Advanced section in the upload form allows manual override of individual thresholds on top of the material defaults. The CLI defaults to ABS and remains backward-compatible.
+
+**Per-face severity gradient over binary coloring.**
+Early versions colored all flagged faces the same flat color per check. This gave no information about which violations were worst. The current implementation passes per-face measurements alongside face indices in the API response: `flagged_face_angles` for draft, `flagged_face_alignments` for undercuts, `thin_face_thicknesses` and `thick_face_thicknesses` for wall thickness, `rib_flagged_thicknesses` for rib proxy, and `flagged_edge_vertices` for sharp corners. The Three.js viewer interpolates between a severe and mild color endpoint based on each face's actual measurement, producing a gradient that immediately communicates which regions need the most attention.
+
+**Pull direction suggestion from geometry.**
+Most first-time users do not know their pull direction. The viewer parses the STL in the browser before upload, computes face-area-weighted surface normal distribution per axis, and suggests the axis with the largest flat-opposing surface area as the probable pull direction. The suggestion updates the dropdown automatically on file selection with a confidence percentage. The user can override it. This runs client-side with no server call.
 
 **Knowledge base: structured JSON injection over RAG.**
-The knowledge base covers fourteen injection molding topics and twelve resin casting topics across four JSON files. RAG was evaluated and rejected. The domain is compact and fully known in advance: every relevant DFM rule for injection molding and resin casting can be written down, reviewed, and corrected. RAG adds retrieval latency, embedding cost, a vector database dependency, and non-deterministic chunk selection for a knowledge corpus that fits comfortably in a single context window. Structured injection is deterministic, auditable, and gives complete control over what the model sees. The `loader.py` module selects which rules to include based on which checks flagged and which production method is active, keeping the prompt focused rather than dumping the entire knowledge base on every call.
+The knowledge base covers fourteen injection molding topics and twelve resin casting topics across four JSON files. RAG was evaluated and rejected. The domain is compact and fully known in advance. RAG adds retrieval latency, embedding cost, a vector database dependency, and non-deterministic chunk selection for a knowledge corpus that fits comfortably in a single context window. Structured injection is deterministic, auditable, and gives complete control over what the model sees. The loader selects which rules to include based on which checks flagged and which production method is active.
+
+**Actionable Fusion 360 fix instructions per finding.**
+The interpretation prompt instructs the model to end every flagged finding with a specific Fusion 360 tool path using the actual measurements from the analysis. A draft violation on a Z-pull ABS part produces: "Fusion 360: Modify > Draft > select flagged face regions > set Pull Direction to Z axis > apply 1.0° minimum." Generic DFM advice that requires the designer to search documentation adds friction between the report and the fix. Embedding the exact menu path removes that friction.
 
 **IP protection: measurements only reach the API.**
-The STL file is written to a temporary server path, processed, and deleted in a `finally` block regardless of whether processing succeeds or fails. The geometry pipeline extracts counts, percentages, measurements, and severity labels. Only those structured measurements are serialized to the Anthropic API. Raw geometry, face coordinates, and vertex data never leave the server. This is the honest IP protection argument for entrepreneurs whose design is their primary competitive asset.
+The STL file is written to a temporary server path, processed, and deleted in a `finally` block regardless of whether processing succeeds or fails. The geometry pipeline extracts counts, percentages, measurements, and severity labels. Only those structured measurements are serialized to the Anthropic API. Raw geometry, face coordinates, and vertex data never leave the server.
 
-**3D viewport: Three.js with per-face coloring.**
-The viewport renders the STL mesh in the browser using Three.js loaded from a CDN via importmap, requiring no build step. The face index arrays from the draft angle and undercut checks are preserved in the API response and passed to the viewer. Each face is colored based on which checks flagged it: red for draft violations, orange for undercuts, neutral gray for all others. Wall thickness and rib proxy cannot be highlighted because both use sampling rather than per-face analysis, so they do not produce face index lists. Layer toggles allow each check's highlighting to be turned on and off independently. Click-to-card raycasting connects flagged faces in the viewport to their corresponding finding cards in the report.
-
-**Pull direction as required user input.**
-Determining the optimal pull direction for a complex part is a research problem in computational geometry that tools with full CAD kernel access have not fully solved. Requiring the user to specify it forces an explicit manufacturing intent decision before analysis runs. The default is Z, handling the most common case for parts with a flat base.
+**Material preview mode: PBR materials over custom shaders.**
+The viewer supports a material preview mode that replaces the severity-colored mesh with a `MeshStandardMaterial` using physically-based rendering properties calibrated to specific production materials: ceramic-coated finish (roughness 0.93), polyurethane resin cast (roughness 0.72), zamak die cast (metalness 0.88, roughness 0.18), and CNC machined resin prototype (roughness 0.48). Zamak uses Three.js `RoomEnvironment` via `PMREMGenerator` for accurate metallic reflections with no external HDR file required. Matte presets skip environment mapping. Switching back to DFM view restores the vertex color buffer exactly.
 
 ## Install and Run
 
@@ -88,9 +95,11 @@ Start the server:
 uvicorn src.web.app:app --reload
 ```
 
-Open `http://127.0.0.1:8000` in your browser. Upload an STL file, select your prototype and production method, and click Analyze.
+Open `http://127.0.0.1:8000` in your browser. Upload an STL file, select your material, prototype method, and production method, and click Analyze.
 
 **Note on installation:** trimesh's ray casting engine requires the `rtree` package, which is not pulled in automatically. If you see `ModuleNotFoundError: No module named 'rtree'`, run `pip install rtree`.
+
+**Running without an API key:** The geometry pipeline runs fully without an Anthropic API key. The DFM assessment section will show a placeholder. All five geometry checks, the 3D viewport, severity coloring, and check cards render normally.
 
 ### CLI (geometry checks without web interface)
 
@@ -121,19 +130,19 @@ cad-auditor/
 ├── src/
 │   ├── main.py                  CLI entry point
 │   ├── load_geometry.py         STL validation and mesh loading
-│   ├── draft_check.py           Draft angle analysis
-│   ├── thickness_check.py       Wall thickness via ray casting
-│   ├── undercut_check.py        Undercut detection
-│   ├── feature_check.py         Rib proxy and sharp corner checks
-│   ├── aggregate.py             Orchestrates all five checks
-│   ├── interpret.py             Anthropic SDK call and two-stage prompt design
+│   ├── draft_check.py           Draft angle analysis with per-face angle output
+│   ├── thickness_check.py       Wall thickness via ray casting with per-sample face indices
+│   ├── undercut_check.py        Undercut detection with per-face alignment output
+│   ├── feature_check.py         Rib proxy and sharp corner checks with edge vertex output
+│   ├── aggregate.py             Orchestrates all five checks with material-specific thresholds
+│   ├── interpret.py             Anthropic SDK, two-stage prompt, Fusion 360 fix instructions
 │   ├── report.py                JSON and markdown output (CLI only)
-│   ├── stage.py                 Stage relevance labels and production severity overrides
+│   ├── stage.py                 Stage relevance labels and production method severity overrides
 │   ├── knowledge/
-│   │   ├── loader.py            Builds knowledge context string for the prompt
+│   │   ├── loader.py            Builds knowledge context, selects by production method and material
 │   │   └── data/
 │   │       ├── dfm_rules.json           14-entry injection molding knowledge base
-│   │       ├── materials.json           5 common plastic material profiles
+│   │       ├── materials.json           5 plastic material profiles with thresholds
 │   │       ├── collectibles.json        Collectible form object specific rules
 │   │       └── resin_casting_rules.json 12-entry resin casting knowledge base
 │   └── web/
@@ -143,58 +152,79 @@ cad-auditor/
 │   ├── index.html               Single-page dashboard
 │   ├── style.css                Dashboard styling
 │   ├── app.js                   Upload form, analysis flow, results rendering
-│   └── viewer.js                Three.js 3D viewport with per-face severity coloring
+│   └── viewer.js                Three.js 3D viewport, all five check visualizations, material preview
 ├── tests/
 │   └── test_geometry_checks.py
 ├── eval/
 │   └── cases.json               4-case labeled evaluation set
 ├── sample_stl/
+├── docs/
+│   └── dashboard.png
 ├── requirements.txt
 └── README.md
 ```
 
+## 3D Viewport
+
+The viewport renders the STL mesh in the browser using Three.js loaded from a CDN via importmap. No build step required.
+
+**Color encoding:** Draft violations are a red gradient from deep red at 0° to light pink near the threshold. Undercuts are an orange gradient. Wall thickness thin violations are a blue gradient. Wall thickness thick violations are a purple gradient. Rib thickness violations are a pink gradient. Sharp corner edges are yellow `LineSegments` overlaid on the mesh.
+
+**Interactive legend:** The legend in the bottom-left corner shows all five check types with face counts. Clicking any legend row toggles that check's visualization on and off.
+
+**Controls:** Drag to rotate. Scroll to zoom. Ctrl+drag to pan. Click any flagged face to highlight and scroll to the corresponding finding card. Click any finding card to animate the camera to frame that check's flagged region.
+
+**Isolation mode:** The Isolate flagged button hides all unflagged geometry. Useful for dense meshes where a large percentage of faces are flagged.
+
+**Severity filter slider:** The Worst slider trims the viewport to show only the N% most severe faces per check. At 10%, only the most critically undrafted faces remain colored.
+
+**Material preview mode:** The Material preview button switches the mesh from severity coloring to a PBR material simulation across four production material presets.
+
 ## Evaluation Results
 
-**Test box (30 x 20 x 10mm solid box, 12 faces):** All five checks produced expected results. Draft flagged all four side walls at zero degrees. Thickness reported approximately 10mm through the solid, above the 4mm maximum. Undercuts flagged the bottom face at alignment score of negative 1.0 against Z pull. Sharp corners passed at 90 degrees above the 45 degree threshold. Rib proxy flagged 100% of samples above the 4.17mm threshold. Overall severity HIGH as expected for a solid rectangular block.
+**Test box (30 x 20 x 10mm solid box, 12 faces):** All five checks produced expected results. Overall severity HIGH as expected for a solid rectangular block.
 
-**Real casing part (90 x 35 x 110mm, 335,930 faces):** 26.0% of faces flagged for draft violations. 40.6% flagged as potential undercuts, which on a casing with internal geometry and mating features likely includes intentional undercuts accommodated in the tooling design. Maximum measured thickness of 91.38mm indicates an uncored solid region. 167 sharp edges below the 45 degree threshold. This run also revealed a context window overflow bug on dense meshes, fixed in the face index stripping commit.
+**Real casing part (90 x 35 x 110mm, 335,930 faces):** 26.0% of faces flagged for draft violations. 40.6% flagged as potential undercuts. Maximum measured thickness of 91.38mm indicates an uncored solid region. 167 sharp edges below the 45 degree threshold.
 
 **Known limitations reported honestly:**
 - Rib detection is a thickness distribution proxy. True rib identification requires parametric CAD feature data not present in STL format.
 - Undercut detection is a first-order approximation based on face normal alignment. Full shadow volume computation is out of scope.
-- Wall thickness uses sampling (500 points by default). Localized thin regions between sample points may be missed on complex geometry.
-- Pull direction must be specified by the user. The tool does not infer it.
-- STL carries no unit metadata. The tool assumes millimeters, which is the injection molding and resin casting convention.
-- 3D face highlighting covers draft angle and undercut checks only. Wall thickness and rib proxy use sampling and do not produce per-face index lists.
+- Wall thickness and rib proxy use sampling (500 points by default). Sampled face indices are visualized but do not constitute complete coverage of all violations.
+- Pull direction suggestion is a surface area heuristic and should be verified before accepting.
+- STL carries no unit metadata. The tool assumes millimeters.
 
 ## Knowledge Base Sources
 
-Injection molding rules are sourced from: Protolabs design tips library, Fictiv injection molding design guide, ZetarMold gate types guide, Xometry surface finish reference, and Malloy, *Plastic Part Design for Injection Molding*, Hanser, 2nd ed. 2010.
+Injection molding rules are sourced from: Protolabs design tips library, Fictiv injection molding design guide, ZetarMold gate types guide, Xometry surface finish reference, Sussex IM gate types guide, Weilin Plastic venting design guide, and Malloy, *Plastic Part Design for Injection Molding*, Hanser, 2nd ed. 2010.
 
-Resin casting rules are sourced from: WayKen vacuum casting design guide, SyBridge Technologies critical design guidelines for urethane casting, Formlabs vacuum casting guide, GD Prototyping Shore hardness chart, RAMPF/Innovative Polymers painting cast urethane parts guide, and Wortmann et al. 2022, *Industrial-Scale Vacuum Casting with Silicone Molds: A Review*, Applied Research, Wiley.
+Resin casting rules are sourced from: WayKen vacuum casting design guide, SyBridge Technologies critical design guidelines for urethane casting, Formlabs vacuum casting guide, GD Prototyping Shore hardness chart, RAMPF/Innovative Polymers painting cast urethane parts guide, FacFox design tips for urethane casting, and Wortmann et al. 2022, *Industrial-Scale Vacuum Casting with Silicone Molds: A Review*, Applied Research, Wiley.
 
 ## Status
 
 **Complete:**
-- Five geometry checks with 56 passing tests
-- 4-case labeled evaluation set with 4/4 passing
-- LLM interpretation via Anthropic SDK with two-stage prompt structure
-- JSON and markdown report output (CLI)
-- CLI with configurable thresholds
-- FastAPI web layer with single `/analyze` endpoint
-- Browser dashboard with severity banner, mesh summary, manufacturing context panel, and per-check finding cards
-- Two-stage report separating prototype-stage from production-stage findings
-- Production method selection: injection molding and resin casting
-- Production method severity overrides for resin casting (draft advisory, undercuts pass, wall threshold 0.5mm)
-- Three.js 3D viewport with per-face draft and undercut highlighting, layer toggles, orbit controls, and click-to-card raycasting
-- Injection molding knowledge base: 14 sourced entries covering all five checks plus gate types, runner systems, venting, surface finish standards, bosses, weld lines, ejector pins, secondary operations, and common defects
-- Resin casting knowledge base: 12 sourced entries covering process overview, per-check guidance, common defects, pour gate design, master pattern quality, Shore hardness selection, in-mold inserts, overmolding, post-processing, and color matching
-- Validated against real part geometry at 335,930 face density
+- Five geometry checks with 56 passing tests and 4-case eval set
+- LLM interpretation with two-stage prompt, material context, and Fusion 360 fix instructions
+- Mock interpretation when API key absent
+- FastAPI web layer with /analyze endpoint
+- Material selector: ABS, PP, PC, Nylon PA6, TPE with per-material thresholds
+- Configurable threshold overrides in Advanced section
+- Pull direction suggestion from geometry computed client-side
+- Two-stage report separating prototype from production findings
+- Production method selection: injection molding and resin casting with severity overrides
+- Severity banner using effective post-override severity
+- Three.js 3D viewport with per-face severity gradient for all five checks
+- Interactive legend with face counts doubling as layer toggles
+- Isolation mode, severity filter slider, camera zoom, hover tooltips
+- Sharp corner edge highlighting as yellow LineSegments
+- Material preview mode: ceramic coated, resin cast, zamak die cast, CNC prototype
+- Injection molding knowledge base: 14 sourced entries
+- Resin casting knowledge base: 12 sourced entries
+- Validated against real part at 335,930 face density
 - IP protection: STL deleted after processing, only measurements reach Anthropic API
 
 **Planned:**
-- Dashboard screenshot in README
-- Resin casting as selectable prototype method (currently injection molding and resin casting are production methods; SLS, FDM, and resin are prototype methods)
-- Configurable thresholds in the web UI
+- Version comparison: diff two analyses to show which issues improved after redesign
+- Resin casting as selectable prototype method
 - PDF report download
-- Targeted face highlighting for wall thickness and rib proxy once per-region sampling is added
+- Boss and weld line detection as dedicated geometry checks
+- Deployed demo URL
