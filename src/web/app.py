@@ -15,11 +15,11 @@ Run from the project root with:
 import os
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from typing import Optional
 
 from src.load_geometry import load_stl
 from src.aggregate import run_all_checks
@@ -27,6 +27,7 @@ from src.stage import apply_stage_labels, compute_overall_effective_severity
 from src.interpret import interpret_findings_staged
 from src.knowledge.loader import get_material_thresholds
 from src.boss_check import detect_bosses
+from src.assembly_check import check_interference, find_mating_faces, compute_tolerance_stack
 
 app = FastAPI(title="CAD Auditor", version="1.0.0")
 
@@ -67,9 +68,9 @@ def analyze(
             status_code=422,
         )
 
-    if production_method.lower() not in ("injection_molding", "vacuum_casting", "slurry_casting"):
+    if production_method.lower() not in ("injection_molding", "resin_casting"):
         return JSONResponse(
-            {"success": False, "error": "production_method must be injection_molding, vacuum_casting, or slurry_casting"},
+            {"success": False, "error": "production_method must be injection_molding or resin_casting"},
             status_code=422,
         )
 
@@ -89,7 +90,7 @@ def analyze(
             tmp_path = tmp.name
 
         mesh = load_stl(tmp_path, verbose=False)
-        
+
         mat_thresholds = get_material_thresholds(material.lower())
 
         def _parse(val):
@@ -134,11 +135,11 @@ def analyze(
         )
 
         return JSONResponse({
-            "success": True,
-            "file_name": file.filename,
-            "findings": staged,
+            "success":       True,
+            "file_name":     file.filename,
+            "findings":      staged,
             "interpretation": interpretation,
-            "material": material.lower(),
+            "material":      material.lower(),
             "material_name": mat_thresholds["material_name"],
         })
 
@@ -151,6 +152,71 @@ def analyze(
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+@app.post("/check-assembly")
+def check_assembly(
+    file_a: UploadFile = File(...),
+    file_b: UploadFile = File(...),
+    production_method: str = Form(default="injection_molding"),
+):
+    """
+    Run cross-part assembly checks on two STL files simultaneously.
+    Both files must be exported in the same coordinate frame from Fusion 360.
+    Both files are deleted immediately after processing.
+    """
+    tmp_a = tmp_b = None
+    try:
+        suffix_a = Path(file_a.filename).suffix.lower() if file_a.filename else ".stl"
+        suffix_b = Path(file_b.filename).suffix.lower() if file_b.filename else ".stl"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix_a) as fa:
+            fa.write(file_a.file.read())
+            tmp_a = fa.name
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix_b) as fb:
+            fb.write(file_b.file.read())
+            tmp_b = fb.name
+
+        mesh_a = load_stl(tmp_a, verbose=False)
+        mesh_b = load_stl(tmp_b, verbose=False)
+
+        interference = check_interference(mesh_a, mesh_b)
+        mating       = find_mating_faces(mesh_a, mesh_b)
+
+        def get_extents(mesh, fname):
+            e = mesh.extents
+            return {
+                "x": round(float(e[0]), 2),
+                "y": round(float(e[1]), 2),
+                "z": round(float(e[2]), 2),
+                "file_name": fname,
+            }
+
+        bounding_boxes = [
+            get_extents(mesh_a, file_a.filename),
+            get_extents(mesh_b, file_b.filename),
+        ]
+        tolerance = compute_tolerance_stack(bounding_boxes, production_method)
+
+        return JSONResponse({
+            "success":         True,
+            "part_a":          file_a.filename,
+            "part_b":          file_b.filename,
+            "interference":    interference,
+            "mating_faces":    mating,
+            "tolerance_stack": tolerance,
+        })
+
+    except Exception as exc:
+        return JSONResponse(
+            {"success": False, "error": str(exc)},
+            status_code=422,
+        )
+    finally:
+        for p in (tmp_a, tmp_b):
+            if p and os.path.exists(p):
+                os.unlink(p)
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

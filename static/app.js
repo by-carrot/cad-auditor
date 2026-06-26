@@ -45,6 +45,7 @@ let firstAnalysisData     = null;
 let compareFile           = null;
 let assemblyParts = [];
 let assemblyFile  = null;
+let firstStlBuffer = null;
 
 const HISTORY_KEY = 'cad_auditor_history';
 const MAX_HISTORY = 3;
@@ -229,6 +230,7 @@ analyzeBtn.addEventListener('click', async () => {
         if (slider) { slider.value = 100; document.getElementById('filter-pct').textContent = 'All'; }
 
         firstAnalysisData = data;
+        firstStlBuffer    = stlBuffer;
         saveToHistory(data);
         renderResults(data);
         showState('results');
@@ -257,6 +259,7 @@ document.getElementById('analyze-another').addEventListener('click', () => {
     fileDisplay.hidden = true;
     dropZone.classList.remove('has-file');
     analyzeBtn.disabled = true;
+    firstStlBuffer = null;
     showState('upload');
 
     firstAnalysisData  = null;
@@ -336,14 +339,16 @@ assemblyAnalyzeBtn.addEventListener('click', async () => {
     document.getElementById('assembly-loading').hidden = false;
     assemblyAnalyzeBtn.disabled = true;
 
+    const partBuffer = await assemblyFile.arrayBuffer();
+    const suggestion = computePullSuggestion(partBuffer);
+
     const f = firstAnalysisData.findings;
     const formData = new FormData();
     formData.append('file',             assemblyFile);
-    formData.append('pull_direction',
-        computePullSuggestion(await assemblyFile.arrayBuffer()).suggested || 'Z');
+    formData.append('pull_direction',   suggestion.suggested || 'Z');
     formData.append('prototype_method', f.prototype_method || 'sls');
     formData.append('production_method', f.production_method || 'injection_molding');
-    formData.append('material',          firstAnalysisData.material || 'abs');
+    formData.append('material',         firstAnalysisData.material || 'abs');
 
     try {
         const resp = await fetch('/analyze', { method: 'POST', body: formData });
@@ -361,6 +366,7 @@ assemblyAnalyzeBtn.addEventListener('click', async () => {
             file_name:     data.file_name,
             material_name: data.material_name,
             findings:      data.findings,
+            stlBuffer:     partBuffer,
         });
         renderAssemblyPanel();
 
@@ -374,6 +380,8 @@ assemblyAnalyzeBtn.addEventListener('click', async () => {
         alert('Could not reach the server.');
     }
 });
+
+document.getElementById('assembly-check-btn')?.addEventListener('click', runAssemblyChecks);
 
 let previewActive = false;
 
@@ -1193,4 +1201,164 @@ function renderAssemblyPanel() {
             Undercuts: <strong>${totalUndercut.toLocaleString()}</strong> faces ·
             Sharp edges: <strong>${totalSharp.toLocaleString()}</strong>
         </div>`;
+
+    // Show assembly check button when 2+ parts available
+    const checkBtn = document.getElementById('assembly-check-btn');
+    if (checkBtn) {
+        checkBtn.hidden  = allParts.length < 2;
+        checkBtn.disabled = false;
+        checkBtn.textContent = 'Run Assembly Checks';
+    }
+    document.getElementById('assembly-check-results').hidden = true;
+}
+
+// ── Assembly checks (interference, mating face, tolerance stack) ───
+
+async function runAssemblyChecks() {
+    if (!firstStlBuffer || assemblyParts.length === 0) return;
+
+    const btn = document.getElementById('assembly-check-btn');
+    const results = document.getElementById('assembly-check-results');
+    btn.disabled = true;
+    btn.textContent = 'Running checks…';
+    results.hidden = true;
+
+    const partB = assemblyParts[0];
+    if (!partB.stlBuffer) {
+        alert('Part B buffer not available. Re-add the part.');
+        btn.disabled = false;
+        btn.textContent = 'Run Assembly Checks';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file_a', new Blob([firstStlBuffer], { type: 'application/octet-stream' }),
+        firstAnalysisData.file_name || 'part_a.stl');
+    formData.append('file_b', new Blob([partB.stlBuffer], { type: 'application/octet-stream' }),
+        partB.file_name || 'part_b.stl');
+    formData.append('production_method',
+        firstAnalysisData.findings.production_method || 'injection_molding');
+
+    try {
+        const resp = await fetch('/check-assembly', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        btn.disabled = false;
+        btn.textContent = 'Run Assembly Checks';
+
+        if (!data.success) {
+            alert(`Assembly check failed:\n\n${data.error}`);
+            return;
+        }
+
+        renderAssemblyChecks(data);
+        results.hidden = false;
+
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Run Assembly Checks';
+        alert('Could not reach the server.');
+    }
+}
+
+function renderAssemblyChecks(data) {
+    const el = document.getElementById('assembly-check-results');
+
+    // Interference
+    const int = data.interference;
+    const intIcon = int.has_interference === false ? '✅'
+                  : int.has_interference === true  ? '🔴' : '⚪';
+    const intSev  = int.severity || 'inconclusive';
+
+    // Mating faces
+    const mat = data.mating_faces;
+    const matIcon = mat.verdict === 'good' ? '✅'
+                  : mat.verdict === 'review' ? '🟡'
+                  : mat.verdict === 'poor' ? '🔴' : '⚪';
+
+    // Tolerance stack — pick the axis with the largest stack dimension
+    const tol = data.tolerance_stack;
+    const axes = ['x', 'y', 'z'];
+    const stackRows = axes.map(axis => {
+        const t = tol[axis];
+        const flag = t.worst_case_tolerance_mm > 1.0 ? '⚠' : '✓';
+        return `<tr>
+            <td class="ac-td">${axis.toUpperCase()} axis</td>
+            <td class="ac-td-mono">${t.stack_dimension_mm}mm</td>
+            <td class="ac-td-mono">±${t.worst_case_tolerance_mm}mm</td>
+            <td class="ac-td-mono">±${t.rss_tolerance_mm}mm</td>
+            <td class="ac-td">${flag}</td>
+        </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+        <div class="ac-section">
+            <div class="ac-section-label">Coordinate Frame Requirement</div>
+            <div class="ac-warning">
+                ⚠ Interference and mating face results are only valid if both STL files
+                were exported from Fusion 360 with the same world origin. Use
+                File → Export and do not reposition parts between exports.
+            </div>
+        </div>
+
+        <div class="ac-section">
+            <div class="ac-section-label">Interference Detection</div>
+            <div class="ac-result-row">
+                <span class="ac-icon">${intIcon}</span>
+                <div>
+                    <span class="sev-badge sev-${intSev}">${intSev}</span>
+                    <p class="ac-desc">${int.description}</p>
+                    ${int.has_interference === true ? `
+                    <div class="ac-measurements">
+                        Part B inside A: <strong>${int.pct_b_inside_a}%</strong> of samples ·
+                        Part A inside B: <strong>${int.pct_a_inside_b}%</strong> of samples
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>
+
+        <div class="ac-section">
+            <div class="ac-section-label">Mating Face Analysis
+                <span class="ac-pair-note">${data.part_a} ↔ ${data.part_b}</span>
+            </div>
+            <div class="ac-result-row">
+                <span class="ac-icon">${matIcon}</span>
+                <div>
+                    <p class="ac-desc">${mat.description}</p>
+                    ${mat.found ? `
+                    <div class="ac-measurements">
+                        Gap: <strong>${mat.gap_mm}mm</strong> ·
+                        Parallelism error: <strong>${mat.parallelism_error_degrees}°</strong> ·
+                        Face areas: <strong>${mat.area_a_mm2}mm²</strong> vs
+                        <strong>${mat.area_b_mm2}mm²</strong>
+                        (${Math.round(mat.area_ratio * 100)}% match)
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>
+
+        <div class="ac-section">
+            <div class="ac-section-label">Tolerance Stack
+                <span class="ac-pair-note">Injection molding: ±0.08mm + ±0.002mm/mm</span>
+            </div>
+            <table class="ac-tol-table">
+                <thead>
+                    <tr>
+                        <th class="ac-th">Axis</th>
+                        <th class="ac-th">Stack dimension</th>
+                        <th class="ac-th">Worst case (linear)</th>
+                        <th class="ac-th">Realistic (RSS)</th>
+                        <th class="ac-th"></th>
+                    </tr>
+                </thead>
+                <tbody>${stackRows}</tbody>
+            </table>
+            <p class="ac-tol-note">
+                Worst case adds all tolerances linearly (conservative).
+                RSS uses root-sum-of-squares (realistic for production).
+                Flag ⚠ when worst-case tolerance exceeds ±1.0mm.
+            </p>
+        </div>`;
+
+    document.getElementById('assembly-check-btn').hidden = false;
 }
