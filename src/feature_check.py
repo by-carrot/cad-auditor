@@ -86,7 +86,14 @@ def check_rib_thickness_proxy(
     inward_directions = -mesh.face_normals[face_indices]
     origins_offset = centroids + inward_directions * ORIGIN_OFFSET_MM
 
-    thicknesses = cast_thickness_rays(mesh, origins_offset, inward_directions)
+    thicknesses, valid_ray_idx = cast_thickness_rays(
+        mesh, origins_offset, inward_directions, return_ray_indices=True
+    )
+    valid_face_idx = (
+        face_indices[valid_ray_idx]
+        if len(valid_ray_idx) > 0
+        else np.array([], dtype=int)
+    )
     n_measured = len(thicknesses)
 
     if n_measured == 0:
@@ -97,6 +104,8 @@ def check_rib_thickness_proxy(
             "max_rib_ratio": max_rib_ratio,
             "n_samples_measured": 0,
             "pct_exceeding_ratio": None,
+            "rib_flagged_face_indices":  [],
+            "rib_flagged_thicknesses":   [],
             "description": (
                 "No thickness measurements obtained. "
                 "Mesh may not be watertight. Rib analysis skipped."
@@ -109,6 +118,8 @@ def check_rib_thickness_proxy(
 
     rib_thickness_threshold = nominal_wall_mm / max_rib_ratio
     exceeding = thicknesses > rib_thickness_threshold
+    rib_flagged_face_indices  = valid_face_idx[exceeding].tolist()
+    rib_flagged_thicknesses   = [round(float(t), 3) for t in thicknesses[exceeding]]
     pct_exceeding = float(exceeding.sum()) / n_measured
 
     if pct_exceeding > 0.15:
@@ -143,6 +154,8 @@ def check_rib_thickness_proxy(
         "rib_thickness_threshold_mm": round(rib_thickness_threshold, 3),
         "n_samples_measured": n_measured,
         "pct_exceeding_ratio": round(pct_exceeding, 4),
+        "rib_flagged_face_indices":  rib_flagged_face_indices,
+        "rib_flagged_thicknesses":   rib_flagged_thicknesses,
         "description": description,
         "methodology_note": (
             "Proxy analysis based on thickness distribution. "

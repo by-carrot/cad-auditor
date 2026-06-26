@@ -409,9 +409,9 @@ body {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    overflow: hidden;
     margin-bottom: 24px;
     box-shadow: var(--shadow);
+    position: relative;
 }
 
 .viewport-header {
@@ -477,7 +477,7 @@ body {
 .dfm-canvas {
     display: block;
     width: 100%;
-    height: 440px;
+    height: 560px;
 }
 
 .viewport-hint {
@@ -552,12 +552,16 @@ body {
 /* ── Viewport legend ──────────────────────────────────────────── */
 .viewport-legend {
     position: absolute;
-    bottom: 36px;
+    bottom: 46px;
     left: 14px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    pointer-events: none;
+    gap: 8px;
+    z-index: 20;
+    background: rgba(15, 23, 42, 0.88);
+    border-radius: 8px;
+    padding: 10px 12px;
+    pointer-events: auto;
 }
 
 .legend-row {
@@ -634,4 +638,107 @@ body {
     color: #cbd5e1;
     min-width: 28px;
     text-align: right;
+}
+
+/* ── Pull direction suggestion ────────────────────────────────── */
+.pull-suggestion {
+    color: #1d9e75;
+    font-weight: 500;
+}
+
+/* ── Advanced threshold section ───────────────────────────────── */
+.advanced-section {
+    margin-bottom: 16px;
+}
+
+.advanced-toggle {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-2);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    user-select: none;
+}
+
+.advanced-toggle::-webkit-details-marker { display: none; }
+
+.advanced-toggle::before {
+    content: '›';
+    font-size: 16px;
+    transition: transform 0.15s;
+    display: inline-block;
+}
+
+details[open] .advanced-toggle::before {
+    transform: rotate(90deg);
+}
+
+.advanced-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.form-input {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--surface);
+    width: 100%;
+}
+
+.form-input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+
+/* ── Legend interactive state ─────────────────────────────────── */
+.legend-row,
+.legend-line-row {
+    cursor: pointer;
+    transition: opacity 0.2s;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.legend-row:hover,
+.legend-line-row:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+.legend-row.layer-off,
+.legend-line-row.layer-off {
+    opacity: 0.3;
+}
+
+.legend-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #94a3b8;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
+/* Sharp corner line swatch */
+.legend-line-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.legend-line-swatch {
+    width: 12px;
+    height: 2px;
+    background: #fbbf24;
+    border-radius: 1px;
+    flex-shrink: 0;
 }

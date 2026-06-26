@@ -169,23 +169,6 @@
         <section class="viewport-section">
             <div class="viewport-header">
                 <p class="panel-label" style="margin:0">3D View</p>
-                <div class="layer-toggles">
-                    <button class="layer-btn active" data-check="draft_angle">
-                        <span class="layer-dot" style="background:#ef4444"></span>
-                        Draft angles
-                        <span class="layer-count" id="count-draft_angle"></span>
-                    </button>
-                    <button class="layer-btn active" data-check="undercuts">
-                        <span class="layer-dot" style="background:#f97316"></span>
-                        Undercuts
-                        <span class="layer-count" id="count-undercuts"></span>
-                    </button>
-                    <button class="layer-btn active" data-check="sharp_corners">
-                        <span class="layer-dot" style="background:#fbbf24"></span>
-                        Sharp corners
-                        <span class="layer-count" id="count-sharp_corners"></span>
-                    </button>
-                </div>
                 <button class="btn-reset-cam" id="reset-cam">Reset view</button>
                 <button class="btn-reset-cam" id="isolate-btn">Isolate flagged</button>
                 <div class="filter-row">
@@ -195,8 +178,9 @@
                 </div>
             </div>
             <canvas id="dfm-canvas" class="dfm-canvas"></canvas>
+            <div id="viewport-legend" class="viewport-legend" hidden></div>
             <p class="viewport-hint">Drag to rotate · Scroll to zoom · Click a highlighted face to jump to its finding · Yellow lines = sharp corners</p>
-
+        </section>
         <section class="checks-section">
             <div id="prototype-findings" class="stage-block" hidden>
                 <div class="stage-heading stage-proto">⚠ Fix Before Prototyping</div>

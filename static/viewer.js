@@ -4,24 +4,24 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const PRIORITY = ['draft_angle', 'undercuts'];
+const PRIORITY = ['draft_angle', 'undercuts', 'rib_thickness', 'wall_thin', 'wall_thick'];
 
 const CHECK_LABELS = {
-    draft_angle: 'Draft Angle',
-    undercuts:   'Undercut',
+    draft_angle:   'Draft Angle',
+    undercuts:     'Undercut',
+    wall_thin:     'Wall Too Thin',
+    wall_thick:    'Wall Too Thick',
+    rib_thickness: 'Rib Thickness',
 };
 
 // Gradient endpoints per check.
 // severe = color at worst measurement, mild = color at threshold.
 const GRAD = {
-    draft_angle: {
-        severe: new THREE.Color(0xb91c1c),
-        mild:   new THREE.Color(0xfca5a5),
-    },
-    undercuts: {
-        severe: new THREE.Color(0xc2410c),
-        mild:   new THREE.Color(0xfed7aa),
-    },
+    draft_angle:   { severe: new THREE.Color(0xb91c1c), mild: new THREE.Color(0xfca5a5) },
+    undercuts:     { severe: new THREE.Color(0xc2410c), mild: new THREE.Color(0xfed7aa) },
+    wall_thin:     { severe: new THREE.Color(0x1e3a8a), mild: new THREE.Color(0xbfdbfe) },
+    wall_thick:    { severe: new THREE.Color(0x6b21a8), mild: new THREE.Color(0xe9d5ff) },
+    rib_thickness: { severe: new THREE.Color(0x9d174d), mild: new THREE.Color(0xfbcfe8) },
 };
 
 const BASE_COLOR = new THREE.Color(0xcbd5e1);
@@ -37,7 +37,13 @@ let faceMap = new Map();
 let activeLayers = new Set(['draft_angle', 'undercuts']);
 let severityFilter  = 1.0;   // 1.0 = show all, 0.05 = worst 5% only
 let filterThresholds = {};   // {checkName: cutoff_measurement}
-let thresholds = { draft_angle: 1.0, undercuts: -0.259 };
+let thresholds = {
+    draft_angle: 1.0,
+    undercuts:   -0.259,
+    wall_min:    1.5,
+    wall_max:    4.0,
+    rib_threshold: 4.17,
+};
 let isolationMode = false;
 const ISOLATION_HIDE = new THREE.Color(0x1e293b); // matches scene background
 let tooltip = null;
@@ -51,22 +57,37 @@ function gradientColor(checkName, measurement) {
     const g = GRAD[checkName];
     if (!g) return BASE_COLOR.clone();
 
-    let t; // 0 = most severe (dark), 1 = least severe (light)
+    let t;
     if (checkName === 'draft_angle') {
         const thr = thresholds.draft_angle;
         t = thr > 0 ? Math.min(1, Math.max(0, measurement / thr)) : 0;
+    } else if (checkName === 'undercuts') {
+        const thr = thresholds.undercuts;
+        const range = -1.0 - thr;
+        t = range !== 0 ? Math.min(1, Math.max(0, (measurement - (-1.0)) / (-range))) : 0;
+    } else if (checkName === 'wall_thin') {
+        const minThr = thresholds.wall_min;
+        t = minThr > 0 ? Math.min(1, Math.max(0, measurement / minThr)) : 0;
+    } else if (checkName === 'wall_thick') {
+        const maxThr = thresholds.wall_max;
+        t = maxThr > 0 ? Math.min(1, Math.max(0, 1 - (measurement - maxThr) / maxThr)) : 0;
+    } else if (checkName === 'rib_thickness') {
+        const ribThr = thresholds.rib_threshold;
+        t = ribThr > 0 ? Math.min(1, Math.max(0, 1 - (measurement - ribThr) / ribThr)) : 0;
     } else {
-        // undercuts: alignment from -1.0 (severe) to threshold (mild)
-        const thr = thresholds.undercuts; // e.g. -0.259
-        const range = -1.0 - thr;        // e.g. -0.741  (negative)
-        t = range !== 0
-            ? Math.min(1, Math.max(0, (measurement - (-1.0)) / (-range)))
-            : 0;
+        t = 0;
     }
 
     return g.severe.clone().lerp(g.mild, t);
 }
 
+
+function isLayerActive(checkName) {
+    if (checkName === 'wall_thin' || checkName === 'wall_thick') {
+        return activeLayers.has('wall_thickness');
+    }
+    return activeLayers.has(checkName);
+}
 
 // ── Color buffer rebuild ───────────────────────────────────────────────────
 
@@ -82,7 +103,7 @@ function rebuildColors() {
     for (const [faceIdx, checkMeasures] of faceMap) {
         let chosen = null;
         for (const name of PRIORITY) {
-            if (!checkMeasures.has(name) || !activeLayers.has(name)) continue;
+            if (!checkMeasures.has(name) || !isLayerActive(name)) continue;
             const measurement = checkMeasures.get(name);
             if (!facePassesFilter(name, measurement)) continue;
             chosen = gradientColor(name, measurement);
@@ -160,22 +181,40 @@ function animateCameraTo(endTarget, endPosition, durationFrames = 50) {
 export function focusOnCheck(checkName) {
     if (!geo || !meshObj) return;
 
-    // Collect all face indices flagged by this check
+    // Sharp corners use edge geometry, not faceMap
+    if (checkName === 'sharp_corners' && edgeLines) {
+        const pos = edgeLines.geometry.attributes.position;
+        if (pos.count === 0) return;
+        const box = new THREE.Box3();
+        for (let i = 0; i < pos.count; i++) {
+            box.expandByPoint(new THREE.Vector3(
+                pos.getX(i), pos.getY(i), pos.getZ(i)
+            ));
+        }
+        const center = new THREE.Vector3();
+        const size   = new THREE.Vector3();
+        box.getCenter(center);
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const dir    = camera.position.clone().sub(controls.target).normalize();
+        animateCameraTo(center, center.clone().add(dir.multiplyScalar(Math.max(maxDim * 2.2, 40))));
+        return;
+    }
+
     const flaggedIndices = [];
     for (const [faceIdx, checkMeasures] of faceMap) {
-        if (checkMeasures.has(checkName) && activeLayers.has(checkName)) {
+        if (checkMeasures.has(checkName) && isLayerActive(checkName)) {
             flaggedIndices.push(faceIdx);
         }
     }
     if (flaggedIndices.length === 0) return;
 
-    // Sample up to 1000 faces for bounding box calculation
-    const step    = Math.ceil(flaggedIndices.length / 1000);
-    const sample  = flaggedIndices.filter((_, i) => i % step === 0);
-    const pos     = geo.attributes.position;
-    const scale   = meshObj.scale.x;
-    const offset  = meshObj.position;
-    const box     = new THREE.Box3();
+    const step   = Math.ceil(flaggedIndices.length / 1000);
+    const sample = flaggedIndices.filter((_, i) => i % step === 0);
+    const pos    = geo.attributes.position;
+    const scale  = meshObj.scale.x;
+    const offset = meshObj.position;
+    const box    = new THREE.Box3();
 
     for (const fi of sample) {
         for (let v = 0; v < 3; v++) {
@@ -193,12 +232,8 @@ export function focusOnCheck(checkName) {
     box.getCenter(center);
     box.getSize(size);
     const maxDim  = Math.max(size.x, size.y, size.z);
-
-    // Place camera in its current direction, at a distance that frames the region
     const dir     = camera.position.clone().sub(controls.target).normalize();
-    const endPos  = center.clone().add(dir.multiplyScalar(Math.max(maxDim * 2.2, 40)));
-
-    animateCameraTo(center, endPos);
+    animateCameraTo(center, center.clone().add(dir.multiplyScalar(Math.max(maxDim * 2.2, 40))));
 }
 
 
@@ -251,13 +286,14 @@ export function setIsolationMode(active) {
 // ── Tooltip helpers ────────────────────────────────────────────────────────
 
 function formatMeasurement(checkName, measurement) {
-    if (checkName === 'draft_angle') {
-        return `${measurement.toFixed(2)}° draft`;
-    }
+    if (checkName === 'draft_angle') return `${measurement.toFixed(2)}° draft`;
     if (checkName === 'undercuts') {
         const angle = Math.round(Math.acos(Math.abs(measurement)) * 180 / Math.PI);
         return `${angle}° from pull axis`;
     }
+    if (checkName === 'wall_thin')     return `${measurement.toFixed(2)}mm — too thin`;
+    if (checkName === 'wall_thick')    return `${measurement.toFixed(2)}mm — too thick`;
+    if (checkName === 'rib_thickness') return `${measurement.toFixed(2)}mm — rib exceeds ratio`;
     return String(measurement);
 }
 
@@ -278,46 +314,71 @@ function hideTooltip() {
 // ── Legend overlay ─────────────────────────────────────────────
 let legend = null;
 
-function buildLegend(canvas) {
-    if (legend && legend.parentNode) legend.parentNode.removeChild(legend);
+function buildLegend(findings) {
+    const el = document.getElementById('viewport-legend');
+    if (!el) return;
+    legend = el;
 
-    const rect = canvas.getBoundingClientRect();
-    legend = document.createElement('div');
-    legend.className = 'viewport-legend';
-    legend.innerHTML = `
-        <div class="legend-row">
-            <div class="legend-grad" style="background: linear-gradient(to bottom,
-                #b91c1c, #ef4444, #fca5a5)"></div>
+    const ch = findings?.checks || {};
+    const draftN    = ch.draft_angle?.face_count_flagged                         || 0;
+    const undercutN = ch.undercuts?.face_count_flagged                            || 0;
+    const sharpN    = ch.sharp_corners?.n_edges_flagged                           || 0;
+    const wallN     = (ch.wall_thickness?.thin_face_indices?.length  || 0)
+                    + (ch.wall_thickness?.thick_face_indices?.length || 0);
+    const ribN      = ch.rib_thickness_proxy?.rib_flagged_face_indices?.length    || 0;
+
+    function cnt(n) { return `<span class="legend-count">${n.toLocaleString()}</span>`; }
+    function row(id, grad, top, title, bot, n, check) {
+        return `<div class="legend-row" id="${id}" data-check="${check}">
+            <div class="legend-grad" style="background:linear-gradient(to bottom,${grad})"></div>
             <div class="legend-labels">
-                <span>0°</span>
-                <span class="legend-title">Draft</span>
-                <span>${thresholds.draft_angle.toFixed(1)}°</span>
+                <span>${top}</span>
+                <span class="legend-title">${title}</span>
+                <span>${bot}</span>
             </div>
-        </div>
-        <div class="legend-row" id="legend-sharp">
-            <div class="legend-grad" style="background:#fbbf24; min-height:12px; border-radius:3px;"></div>
-            <div class="legend-labels">
-                <span style="font-size:10px; color:#94a3b8; font-family:var(--font-mono, monospace);">Lines</span>
-                <span class="legend-title">Sharp corners</span>
-                <span></span>
-            </div>
-        </div>
-        </div>
-        <div class="legend-neutral">
-            <div class="legend-swatch" style="background:#cbd5e1"></div>
-            <span>No issue</span>
+            ${n > 0 ? cnt(n) : ''}
         </div>`;
-    document.querySelector('.viewport-section').appendChild(legend);
+    }
+
+    el.innerHTML =
+        row('lg-draft',    '#b91c1c,#ef4444,#fca5a5', '0°',   'Draft',        `${thresholds.draft_angle.toFixed(1)}°`, draftN,    'draft_angle')
+      + row('lg-undercut', '#c2410c,#f97316,#fed7aa', 'opp',  'Undercuts',    'thr',   undercutN, 'undercuts')
+      + `<div class="legend-line-row" data-check="sharp_corners" id="lg-sharp">
+             <div class="legend-line-swatch"></div>
+             <span class="legend-title">Sharp corners</span>
+             ${sharpN > 0 ? cnt(sharpN) : ''}
+         </div>`
+      + row('lg-wall-thin',  '#1e3a8a,#3b82f6,#bfdbfe', '0mm',  'Wall thin',  'min', wallN, 'wall_thickness')
+      + row('lg-wall-thick', '#6b21a8,#a855f7,#e9d5ff', 'very', 'Wall thick', 'max', wallN, 'wall_thickness')
+      + row('lg-rib',      '#9d174d,#ec4899,#fbcfe8', 'over', 'Rib thickness','thr',   ribN,      'rib_thickness')
+      + `<div class="legend-neutral">
+             <div class="legend-swatch" style="background:#cbd5e1"></div>
+             <span>No issue</span>
+         </div>`;
+
+    el.querySelectorAll('[data-check]').forEach(row => {
+        row.addEventListener('click', () => {
+            const check = row.dataset.check;
+            toggleLayer(check, !activeLayers.has(check));
+        });
+    });
+
+    el.hidden = false;
 }
 
 function updateLegendVisibility() {
     if (!legend) return;
-    const draftRow  = legend.querySelector('.legend-row:first-child');
-    const undercutRow = document.getElementById('legend-undercuts');
-    const sharpRow    = document.getElementById('legend-sharp');
-    if (draftRow)    draftRow.style.display    = activeLayers.has('draft_angle')   ? 'flex' : 'none';
-    if (undercutRow) undercutRow.style.display = activeLayers.has('undercuts')     ? 'flex' : 'none';
-    if (sharpRow)    sharpRow.style.display    = activeLayers.has('sharp_corners') ? 'flex' : 'none';
+    [
+        ['lg-draft',      'draft_angle'],
+        ['lg-undercut',   'undercuts'],
+        ['lg-sharp',      'sharp_corners'],
+        ['lg-wall-thin',  'wall_thickness'],
+        ['lg-wall-thick', 'wall_thickness'],
+        ['lg-rib',        'rib_thickness'],
+    ].forEach(([id, check]) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('layer-off', !activeLayers.has(check));
+    });
 }
 
 // ── Main init ──────────────────────────────────────────────────────────────
@@ -341,13 +402,17 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
     edgeLines = null;
     severityFilter  = 1.0;
     filterThresholds = {};
-    activeLayers = new Set(['draft_angle', 'undercuts', 'sharp_corners']);
+    activeLayers = new Set(['draft_angle', 'undercuts', 'sharp_corners', 'wall_thickness', 'rib_thickness']);
 
     // Pull thresholds from live findings
     const draftCheck    = findings.checks.draft_angle;
     const undercutCheck = findings.checks.undercuts;
-    thresholds.draft_angle = draftCheck?.threshold_degrees        ?? 1.0;
-    thresholds.undercuts   = -(undercutCheck?.opposing_threshold  ?? 0.259);
+    const wallCheck     = findings.checks.wall_thickness;
+    thresholds.draft_angle   = draftCheck?.threshold_degrees        ?? 1.0;
+    thresholds.undercuts     = -(undercutCheck?.opposing_threshold  ?? 0.259);
+    thresholds.wall_min      = wallCheck?.threshold_min_mm          ?? 1.5;
+    thresholds.wall_max      = wallCheck?.threshold_max_mm          ?? 4.0;
+    thresholds.rib_threshold = findings.checks.rib_thickness_proxy?.rib_thickness_threshold_mm ?? 4.17;
 
     // Build faceMap with per-face measurements
     for (const checkName of PRIORITY) {
@@ -364,6 +429,37 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
             const m  = measurements?.[i] ?? (checkName === 'draft_angle' ? 0 : -1.0);
             if (!faceMap.has(fi)) faceMap.set(fi, new Map());
             faceMap.get(fi).set(checkName, m);
+        }
+    }
+
+    // Wall thickness — thin faces
+    if (wallCheck?.thin_face_indices?.length) {
+        for (let i = 0; i < wallCheck.thin_face_indices.length; i++) {
+            const fi = wallCheck.thin_face_indices[i];
+            const m  = wallCheck.thin_face_thicknesses?.[i] ?? 0;
+            if (!faceMap.has(fi)) faceMap.set(fi, new Map());
+            faceMap.get(fi).set('wall_thin', m);
+        }
+    }
+
+    // Wall thickness — thick faces
+    if (wallCheck?.thick_face_indices?.length) {
+        for (let i = 0; i < wallCheck.thick_face_indices.length; i++) {
+            const fi = wallCheck.thick_face_indices[i];
+            const m  = wallCheck.thick_face_thicknesses?.[i] ?? 0;
+            if (!faceMap.has(fi)) faceMap.set(fi, new Map());
+            faceMap.get(fi).set('wall_thick', m);
+        }
+    }
+
+    // Rib thickness
+    const ribCheck = findings.checks.rib_thickness_proxy;
+    if (ribCheck?.rib_flagged_face_indices?.length) {
+        for (let i = 0; i < ribCheck.rib_flagged_face_indices.length; i++) {
+            const fi = ribCheck.rib_flagged_face_indices[i];
+            const m  = ribCheck.rib_flagged_thicknesses?.[i] ?? 0;
+            if (!faceMap.has(fi)) faceMap.set(fi, new Map());
+            faceMap.get(fi).set('rib_thickness', m);
         }
     }
 
@@ -529,6 +625,17 @@ export function initViewer(canvas, stlArrayBuffer, findings) {
         camera.updateProjectionMatrix();
         renderer.setSize(w, h, false);
     }).observe(canvas);
+
+    // ── Resize ──
+    new ResizeObserver(() => {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h, false);
+    }).observe(canvas);
+
+    buildLegend(findings);
 }
 
 export function computePullSuggestion(stlArrayBuffer) {

@@ -74,6 +74,12 @@ def _strip_face_indices(checks: dict) -> dict:
         check.pop("flagged_face_angles", None)
         check.pop("flagged_face_alignments", None)
         check.pop("flagged_edge_vertices", None)
+        check.pop("thin_face_indices", None)
+        check.pop("thin_face_thicknesses", None)
+        check.pop("thick_face_indices", None)
+        check.pop("thick_face_thicknesses", None)
+        check.pop("rib_flagged_face_indices", None)
+        check.pop("rib_flagged_thicknesses", None)
     return stripped
 
 

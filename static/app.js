@@ -202,14 +202,6 @@ document.getElementById('analyze-another').addEventListener('click', () => {
     updateThresholdPlaceholders();
 });
 
-// ── Layer toggles ──────────────────────────────────────
-document.querySelectorAll('.layer-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        btn.classList.toggle('active');
-        toggleLayer(btn.dataset.check, btn.classList.contains('active'));
-    });
-});
-
 document.getElementById('reset-cam').addEventListener('click', resetCamera);
 
 document.getElementById('severity-slider').addEventListener('input', (e) => {
@@ -352,29 +344,24 @@ function renderResults(data) {
     setTimeout(() => {
         document.querySelectorAll('.check-card').forEach(card => {
             const checkName = card.dataset.check;
-            if (checkName === 'draft_angle' || checkName === 'undercuts') {
+            const viewerMap = {
+                draft_angle:         'draft_angle',
+                undercuts:           'undercuts',
+                wall_thickness:      'wall_thin',
+                rib_thickness_proxy: 'rib_thickness',
+                sharp_corners:       'sharp_corners',
+            };
+            if (viewerMap[checkName]) {
                 card.style.cursor = 'pointer';
                 card.title = 'Click to focus viewport on these faces';
                 card.addEventListener('click', () => {
-                    focusOnCheck(checkName);
+                    focusOnCheck(viewerMap[checkName]);
                     document.getElementById('dfm-canvas')
                         .scrollIntoView({ behavior: 'smooth', block: 'center' });
                 });
             }
         });
     }, 0);
-
-    // Face count badges in layer toggles
-    const draftCount    = f.checks.draft_angle?.face_count_flagged ?? 0;
-    const undercutCount = f.checks.undercuts?.face_count_flagged    ?? 0;
-    const cDraft        = document.getElementById('count-draft_angle');
-    const cUnder        = document.getElementById('count-undercuts');
-    if (cDraft)  cDraft.textContent  = draftCount    > 0 ? draftCount.toLocaleString()    : '';
-    if (cUnder)  cUnder.textContent  = undercutCount > 0 ? undercutCount.toLocaleString() : '';
-
-    const sharpCount = f.checks.sharp_corners?.n_edges_flagged ?? 0;
-    const cSharp = document.getElementById('count-sharp_corners');
-    if (cSharp) cSharp.textContent = sharpCount > 0 ? sharpCount.toLocaleString() : '';
 
     const sections = parseAssessment(data.interpretation);
     document.getElementById('assessment-body').innerHTML = sections.length

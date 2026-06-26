@@ -86,6 +86,7 @@ def cast_thickness_rays(
     mesh: trimesh.Trimesh,
     origins: np.ndarray,
     directions: np.ndarray,
+    return_ray_indices: bool = False,
 ) -> np.ndarray:
     """
     Cast rays inward from surface sample points and return thickness
@@ -103,6 +104,8 @@ def cast_thickness_rays(
         the surface to avoid self-intersection.
     directions : np.ndarray
         Inward unit direction vectors of shape (n, 3).
+    return_ray_indices : bool
+        If True, return a tuple (distances, ray_indices) instead of just distances.
 
     Returns
     -------
@@ -117,12 +120,17 @@ def cast_thickness_rays(
     )
 
     if len(locations) == 0:
-        return np.array([], dtype=float)
+        empty = np.array([], dtype=float)
+        if return_ray_indices:
+            return empty, np.array([], dtype=int)
+        return empty
 
     hit_origins = origins[index_ray]
     raw_distances = np.linalg.norm(locations - hit_origins, axis=1)
-
     valid_mask = raw_distances >= MIN_VALID_THICKNESS_MM
+
+    if return_ray_indices:
+        return raw_distances[valid_mask], index_ray[valid_mask]
     return raw_distances[valid_mask]
 
 
@@ -164,7 +172,14 @@ def check_thickness(
     inward_directions = -mesh.face_normals[face_indices]
 
     origins_offset = centroids + inward_directions * ORIGIN_OFFSET_MM
-    thicknesses = cast_thickness_rays(mesh, origins_offset, inward_directions)
+    thicknesses, valid_ray_idx = cast_thickness_rays(
+        mesh, origins_offset, inward_directions, return_ray_indices=True
+    )
+    valid_face_idx = (
+        face_indices[valid_ray_idx]
+        if len(valid_ray_idx) > 0
+        else np.array([], dtype=int)
+    )
 
     n_measured = len(thicknesses)
 
@@ -181,6 +196,10 @@ def check_thickness(
             "pct_too_thick": None,
             "threshold_min_mm": min_thickness_mm,
             "threshold_max_mm": max_thickness_mm,
+            "thin_face_indices":     [],
+            "thin_face_thicknesses": [],
+            "thick_face_indices":    [],
+            "thick_face_thicknesses": [],
             "description": (
                 "No valid thickness measurements were obtained. "
                 "The mesh may not be watertight. "
@@ -192,6 +211,11 @@ def check_thickness(
     too_thick = thicknesses > max_thickness_mm
     pct_thin = float(too_thin.sum()) / n_measured
     pct_thick = float(too_thick.sum()) / n_measured
+
+    thin_face_indices    = valid_face_idx[too_thin].tolist()
+    thin_face_thicknesses = [round(float(t), 3) for t in thicknesses[too_thin]]
+    thick_face_indices   = valid_face_idx[too_thick].tolist()
+    thick_face_thicknesses = [round(float(t), 3) for t in thicknesses[too_thick]]
 
     if pct_thin > 0.10:
         severity = "high"
@@ -233,5 +257,9 @@ def check_thickness(
         "pct_too_thick": round(pct_thick, 4),
         "threshold_min_mm": min_thickness_mm,
         "threshold_max_mm": max_thickness_mm,
+        "thin_face_indices":     thin_face_indices,
+        "thin_face_thicknesses": thin_face_thicknesses,
+        "thick_face_indices":    thick_face_indices,
+        "thick_face_thicknesses": thick_face_thicknesses,
         "description": description,
     }
