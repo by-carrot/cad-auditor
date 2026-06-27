@@ -443,6 +443,7 @@ const CHECK_NAMES = {
     undercuts:           'Undercuts',
     rib_thickness_proxy: 'Rib Thickness',
     sharp_corners:       'Sharp Corners',
+    boss_detection:      'Boss Detection',
 };
 
 function sevClass(s) { return `sev-${s.toLowerCase()}`; }
