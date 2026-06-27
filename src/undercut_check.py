@@ -136,6 +136,7 @@ def check_undercuts(
         "face_count_flagged": n_flagged,
         "face_count_total": n_total,
         "flagged_face_indices": flagged_indices,
+        "flagged_face_alignments": [round(float(a), 4) for a in flagged_alignment.tolist()] if n_flagged > 0 else [],
         "most_opposing_alignment": (
             round(float(flagged_alignment.min()), 4) if n_flagged > 0 else None
         ),

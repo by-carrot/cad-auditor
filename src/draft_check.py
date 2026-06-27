@@ -190,6 +190,7 @@ def check_draft(
         "face_count_flagged": n_flagged,
         "face_count_total": n_total,
         "flagged_face_indices": flagged_indices,
+        "flagged_face_angles": [round(float(a), 3) for a in flagged_angles.tolist()] if n_flagged > 0 else [],
         "min_measured_degrees": (
             round(float(flagged_angles.min()), 3) if n_flagged > 0 else None
         ),

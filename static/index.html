@@ -37,7 +37,13 @@
         </div>
         <div class="upload-card">
             <div id="drop-zone" class="drop-zone">
-                <div class="drop-icon">📐</div>
+                <div class="drop-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                </div>
                 <p class="drop-primary">Drop your STL file here</p>
                 <p class="drop-secondary">or</p>
                 <label class="file-btn" for="file-input">Choose file</label>
@@ -200,11 +206,11 @@
         </section>
         <section class="checks-section">
             <div id="prototype-findings" class="stage-block" hidden>
-                <div class="stage-heading stage-proto">⚠ Fix Before Prototyping</div>
+                <div class="stage-heading stage-proto">Fix Before Prototyping</div>
                 <div id="proto-cards" class="check-cards"></div>
             </div>
             <div id="production-findings" class="stage-block">
-                <div class="stage-heading stage-prod">🔧 Fix Before Production Tooling</div>
+                <div class="stage-heading stage-prod">Fix Before Production Tooling</div>
                 <div id="prod-cards" class="check-cards"></div>
             </div>
         </section>
@@ -241,8 +247,7 @@
                     <p id="compare-file-name" class="file-selected" hidden></p>
                 </div>
 
-                <button class="analyze-btn" id="compare-analyze-btn" disabled
-                    style="margin-top:12px; font-size:13px; padding:10px">
+                <button class="analyze-btn analyze-btn--compact" id="compare-analyze-btn" disabled>
                     Analyze revision
                 </button>
 
@@ -266,8 +271,8 @@
             <div id="assembly-pull" class="assembly-pull"></div>
             <div id="assembly-parts" class="assembly-parts"></div>
 
-            <button class="analyze-btn" id="assembly-check-btn" hidden
-                style="margin-bottom:14px; font-size:13px; padding:10px; background:#4f46e5">
+            <button class="analyze-btn analyze-btn--compact" id="assembly-check-btn" hidden
+                style="margin-bottom:14px">
                 Run Assembly Checks
             </button>
             <div id="assembly-check-results" hidden></div>
@@ -281,8 +286,7 @@
                     <input type="file" id="assembly-file-input" accept=".stl" hidden>
                     <p id="assembly-file-name" class="file-selected" hidden></p>
                 </div>
-                <button class="analyze-btn" id="assembly-analyze-btn" disabled
-                    style="margin-top:12px; font-size:13px; padding:10px">
+                <button class="analyze-btn analyze-btn--compact" id="assembly-analyze-btn" disabled>
                     Analyze part
                 </button>
                 <div id="assembly-loading" hidden style="text-align:center; padding:16px">
