@@ -115,7 +115,7 @@ function handleFile(file) {
         return;
     }
     selectedFile = file;
-    fileDisplay.textContent = `✓ ${file.name}  (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+    fileDisplay.textContent = `✓ ${file.name}  (${file.size < 1024 * 1024 ? (file.size / 1024).toFixed(1) + ' KB' : (file.size / 1024 / 1024).toFixed(1) + ' MB'})`;
     fileDisplay.hidden = false;
     dropZone.classList.add('has-file');
     analyzeBtn.disabled = false;
@@ -318,7 +318,7 @@ function handleAssemblyFile(file) {
         return;
     }
     assemblyFile = file;
-    assemblyFileNameEl.textContent = `✓ ${file.name}  (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+    assemblyFileNameEl.textContent = `✓ ${file.name}  (${file.size < 1024 * 1024 ? (file.size / 1024).toFixed(1) + ' KB' : (file.size / 1024 / 1024).toFixed(1) + ' MB'})`;
     assemblyFileNameEl.hidden = false;
     assemblyAnalyzeBtn.disabled = false;
 }
